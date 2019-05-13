@@ -462,10 +462,14 @@ fldrstrt = pwd;
 if isfolder(handles.filepath.String{1,1})
     fldrstrt = handles.filepath.String{1,1};
 else
-    lastslash = max(strfind(handles.filepath.String{1,1},'\'));
-    prevfolder = extractBefore(handles.filepath.String{1,1},lastslash+1);
-    if isfolder(prevfolder)
-        fldrstrt = prevfolder;
+    try
+        lastslash = max(strfind(handles.filepath.String{1,1},'\'));
+        prevfolder = extractBefore(handles.filepath.String{1,1},lastslash+1);
+        if isfolder(prevfolder)
+            fldrstrt = prevfolder;
+        end
+    catch
+        fldrstrt = pwd;
     end
 end
 curfldr = pwd;
