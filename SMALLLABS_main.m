@@ -67,6 +67,10 @@ function SMALLLABS_main(file_or_directory_name,dfrlmsz,avgwin,moloffwin,varargin
 % Written by Benjamin P Isaacoff at the University of Michigan last update
 % 3/10/18 BPI & SAL
 %
+% Updated by Koen Martens at the University of Wageningen in 2019 (adding
+% phasor-based localization, GUI, wavelet filter, avg shifted hist,
+% drift-corection)
+%
 %     Copyright (C) 2018  Benjamin P Isaacoff
 %
 %     This program is free software: you can redistribute it and/or modify
@@ -145,13 +149,36 @@ params.fit_ang= 0;
 % use a GPU if one is a available?
 params.usegpu= true;
 
+
+%Make ThunderSTORM csv output file?
+params.makeThSTORMoutput = true;
+
 %% Phasor fitting addition
 % Koen Martens, 08-04-2019, based on extension of pSMLM-3D
 params.phasor_fit = true; %true for pSMLM fitting. Overrides Guassian fitting
 params.phasor_rad = 3;
 params.phasor_2d = true;
+params.phasor_DH = false; %true if DH phasor is wanted. Requires correct calibration file
+params.phasor_DHcal = ''; %Full path to DH calibration file here. Can be made via 
 params.phasor_astig = false; %true if astig phasor is wanted. Requires correct calibration file
 params.phasor_astigcal = ''; %Full path to astig calibration file here. Can be made via 
+params.phasor_SP = false; %true if SP phasor is wanted. Requires correct calibration file
+params.phasor_SPcal = ''; %Full path to SP calibration file here. Can be made via 
+params.phasor_TP = false; %true if TP phasor is wanted. Requires correct calibration file
+params.phasor_TPcal = ''; %Full path to TP calibration file here. Can be made via 
+params.phasor_SPTPradius = 10; %'Large' radius for SP/TP phasor.
+
+%For now, here is some quick and dirty calibration code, this should be
+%done seperately later.
+%     zposcali = ([1:151]*0.01-0.76); %in µm
+%     %Input (now from csv from ThStorm, should be from SMALLLABS later)
+%     input = csvread('H:\Data\DoubleHelix\sequence-as-stack-Beads-DH-Exp-as-stack\AllBeads_phasor2D_phasor3.csv',1,0);
+%     %Required input is frame-x-y
+%     fxyinput = input(:,[2:4 9 10]);
+%     %Set x-y to pixels rather than nm
+%     fxyinput(:,2:3) = fxyinput(:,2:3)./100;
+%     %Perform calibration
+%     pSMLM_DH_calibration_SL(fxyinput,zposcali,1,'H:\Data\DoubleHelix\sequence-as-stack-Beads-DH-Exp-as-stack\SLpSMLM_DH_calib_phasor3.mat');
 
 %%% Filter parameters %%%
 params.filtermethod = 'wavelet'; %Choose between 'wavelet' and 'bpass'
@@ -160,6 +187,8 @@ params.wvltfilter_std = 2; %multiplicator of wavlet filter std.
 %%% Partial analysis %%%
 params.fullmovie = 1;
 params.nrframes = 500;
+params.specificframeanalysis = 0;
+params.specificframe = 100;
     
 %% Resume original code
 %%% Tracking parameters %%%
@@ -180,14 +209,13 @@ params.trackparams(5)=3;
 params.trackparams(6)=1;
 % time delay between consecutive frames (ms)
 params.trackparams(7)=0;
-
 %%% ViewFits parameters %%%
 % use the original movie? if not, use the avgsub movie
 params.orig_movie = true;
 % diameter of the circles showing the fits
 params.circ_D = dfrlmsz;
 % linewidth of the circles
-params.linewidth = 1;
+params.linewidth = 1;%1
 % write a .avi movie showing the fits. If not, goes to debug mode
 params.write_mov=true;
 % autoscale frame by frame?
@@ -327,11 +355,17 @@ for ii=1:numel(dlocs)
     % Movies must be version 7.3 mat files with the movie data saved in the
     % 'mov' variable. This function converts several standard scientific movie
     % data types into this format.
-    Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}])
-    load([dlocs{ii},filesep,dnames{ii},'.mat'],'mov');
-    if params.fullmovie == 0
-        mov = mov(:,:,1:params.nrframes);
+    if params.fullmovie
+        Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}])
+    elseif params.specificframeanalysis %only specific frame - keep in mind the frames required for temporal subtraction, should also be loaded
+        Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],[params.specificframe-max(avgwin,moloffwin),params.specificframe+max(avgwin,moloffwin)])
+    else %only first X frames
+        Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],[1,params.nrframes])
     end
+%     if params.fullmovie == 0
+%         mov = mov(:,:,1:params.nrframes);
+%     end
+    load([dlocs{ii},filesep,dnames{ii},'.mat'],'mov');
     mov=single(mov);
     movsz=size(mov);
     try
@@ -357,13 +391,15 @@ for ii=1:numel(dlocs)
     if params.makeAvgsub && params.bgsub
         if exist([dlocs{ii},filesep,dnames{ii},'_avgsub.mat'],'file')~=0
             avgsubparams=load([dlocs{ii},filesep,dnames{ii},'_avgsub.mat'],'subwidth','offset','do_avg','goodframe');
-            if avgsubparams.subwidth==avgwin && avgsubparams.offset==params.offset && avgsubparams.do_avg==params.do_avg && sum(avgsubparams.goodframe)==sum(goodframe)
-                disp(sprintf(['Avgsub parameters unchanged from previous calculation.\r Skipping avgsub on ',dnames{ii}],1))
-            else
+            % KM: Prevented skipping avgsub due to partial analysis
+            % shenanigans
+            %             if avgsubparams.subwidth==avgwin && avgsubparams.offset==params.offset && avgsubparams.do_avg==params.do_avg && sum(avgsubparams.goodframe)==sum(goodframe)
+%                 disp(sprintf(['Avgsub parameters unchanged from previous calculation.\r Skipping avgsub on ',dnames{ii}],1))
+%             else
                 try; waitbar((7*ii-5)/numel(dlocs)/7,h2,{['Running AVGSUB on ',dnames{ii}],'Overall Progress'}); end
                 bgsub_mov=AVGSUB_movs([dlocs{ii},filesep,dnames{ii}],mov,goodframe,...
                     params.do_avg,avgwin,params.offset);
-            end
+%             end
         else
             %do the avgsub
             try; waitbar((7*ii-5)/numel(dlocs)/7,h2,{['Running AVGSUB on ',dnames{ii}],'Overall Progress'}); end
@@ -501,8 +537,30 @@ for ii=1:numel(dlocs)
         end
         clear fits
     end
+    %% Preview option
+    if params.specificframeanalysis
+        pause(0.5);
+        %load fits
+        if params.bgsub
+            %try loading in the fits & tracking results
+            load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
+        else
+            load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+        end
+        fitsonframe = [fits.row(fits.frame==(max(avgwin,moloffwin)+1)) fits.col(fits.frame==(max(avgwin,moloffwin)+1))];
+        figure(10);clf(10);
+        imagesc(mov(:,:,max(avgwin,moloffwin)+1))
+        hold on
+        scatter(fitsonframe(:,2),fitsonframe(:,1),130,'ro','filled')
+        set(gca,'YDir','reverse')
+%         axis off
+        colorbar
+        colormap parula
+%         caxis([prctile(reshape(mov(:,:,max(avgwin,moloffwin)+1),[movsz(1)*movsz(2),1]),10),...
+%             max(reshape(mov(:,:,max(avgwin,moloffwin)+1),[movsz(1)*movsz(2),1]))*.8]);
+    end
     %% Drift corr
-    if params.driftcorr_cc
+    if (params.driftcorr_cc && params.specificframeanalysis == 0)
         if verbose
             disp([char(datetime),'   Starting cross-correlation drift correction'])
         end
@@ -626,7 +684,7 @@ for ii=1:numel(dlocs)
     end
     %% Make a average-shifted histograms (adapted from ThunderSTORM)
     %added by KM, 2019-04-10
-    if params.makeavgshifthist
+    if (params.makeavgshifthist && params.specificframeanalysis == 0)
         if verbose
             disp([char(datetime),'   Making average-shifted histogram'])
         end
@@ -647,48 +705,52 @@ for ii=1:numel(dlocs)
         avgshifthist(fits,params,movsz,[dlocs{ii},filesep,dnames{ii}],1);
     end
     %% Make ThunderSTORM-like csv output
-    if verbose
-    disp([char(datetime),'   Making CSV output'])
-    end
-    try
-        if params.bgsub
-            %try loading in the fits & tracking results
-            if params.driftcorr_cc
-                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits_driftcorrcc.mat'],'fits');
-            else
-                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
-            end
-        else
-            if params.driftcorr_cc
-            	load([dlocs{ii},filesep,dnames{ii},'_fits_driftcorrcc.mat'],'fits');
-            else
-                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
-            end
+    
+    if( params.makeThSTORMoutput && params.specificframeanalysis == 0)
+        if verbose
+        disp([char(datetime),'   Making CSV output'])
         end
-        array = zeros(size(fits.row,1),5);
-        array(:,1) = [1:size(fits.row,1)]'; % id
-        array(:,2) = fits.frame; %frame
-        
-%         array(:,3:4) = [fits.col fits.row]*100; %x,y pos (nm) - transposed due to matlab shenanigans
-        
-        array(:,3:4) = [fits.col-.1440477+0.0184402 fits.row+.1256075+0.0184402]*params.avgshifthist_pixelsize; %x,y pos (nm) - transposed due to matlab shenanigans - corrected for fitting on beads smlmch
         try
-        array(:,5) = fits.zpos*1000; % zpos (nm)
+            if params.bgsub
+                %try loading in the fits & tracking results
+                if params.driftcorr_cc
+                    load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits_driftcorrcc.mat'],'fits');
+                else
+                    load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
+                end
+            else
+                if params.driftcorr_cc
+                    load([dlocs{ii},filesep,dnames{ii},'_fits_driftcorrcc.mat'],'fits');
+                else
+                    load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+                end
+            end
+            array = zeros(size(fits.row,1),5);
+            array(:,1) = [1:size(fits.row,1)]'; % id
+            array(:,2) = fits.frame; %frame
+
+    %         array(:,3:4) = [fits.col fits.row]*100; %x,y pos (nm) - transposed due to matlab shenanigans
+
+    %         array(:,3:4) = [fits.col-.1440477+0.0184402 fits.row+.1256075+0.0184402]*params.avgshifthist_pixelsize; %x,y pos (nm) - transposed due to matlab shenanigans - corrected for fitting on beads smlmch
+            array(:,3:4) = [fits.col fits.row]*params.avgshifthist_pixelsize; %x,y pos (nm) - transposed due to matlab shenanigans - corrected for fitting on beads smlmch
+            try
+            array(:,5) = fits.zpos*1000; % zpos (nm)
+            catch
+                array(:,5) = zeros(size(fits.frame,1),1);
+            end
+            %export to OUT file in same folder, same name
+                temp = num2cell('"id","frame","x [nm]","y [nm]","z [nm]"');
+                %,"intensity [photon]","offset [photon]","bkgstd [photon]","sigma1 [nm]","sigma2 [nm]"
+                dlmwrite([dlocs{ii},filesep,dnames{ii},'_ThSTORMinput.csv'],temp, '')
+                dlmwrite([dlocs{ii},filesep,dnames{ii},'_ThSTORMinput.csv'],array,'precision',10,'-append');
         catch
-            array(:,5) = zeros(size(fits.frame,1),1);
+            fprintf('Error writing CSV file!\n')
         end
-        %export to OUT file in same folder, same name
-            temp = num2cell('"id","frame","x [nm]","y [nm]","z [nm]"');
-            %,"intensity [photon]","offset [photon]","bkgstd [photon]","sigma1 [nm]","sigma2 [nm]"
-            dlmwrite([dlocs{ii},filesep,dnames{ii},'_ThSTORMinput.csv'],temp, '')
-            dlmwrite([dlocs{ii},filesep,dnames{ii},'_ThSTORMinput.csv'],array,'precision',10,'-append');
-    catch
-        fprintf('Error writing CSV file!\n')
     end
     %% Make the ViewFits movie
     % Make a ViewFits movie, or just go into debug mode, to look at the
     % results. Outpits an avi file called moviename_ViewFits.avi
-    if params.makeViewFits
+    if( params.makeViewFits && params.specificframeanalysis == 0)
         try; waitbar((7*ii)/numel(dlocs)/7,h2,{['Making Viewfits ',dnames{ii}],'Overall Progress'}); end
         if params.bgsub
             %try loading in the fits & tracking results
@@ -734,8 +796,13 @@ for ii=1:numel(dlocs)
             end
             
             if ~params.trackingVF
+%                 ViewFits([dlocs{ii},filesep,dnames{ii},'.mat'],...
+%                     mov,trk_filt,movsz,goodframe,fits,...
+%                     params.circ_D,params.write_mov,params.autoscale_on,params.linewidth)
+                fits.row = fits.row*4;
+                fits.col = fits.col*4;
                 ViewFits([dlocs{ii},filesep,dnames{ii},'.mat'],...
-                    mov,trk_filt,movsz,goodframe,fits,...
+                    imresize(mov,4,'nearest'),trk_filt,movsz,goodframe,fits,...
                     params.circ_D,params.write_mov,params.autoscale_on,params.linewidth)
             else
                 ViewFitsTracking([dlocs{ii},filesep,dnames{ii},'.mat'],...
@@ -760,6 +827,6 @@ try
     rmpath(genpath('gpufit'))
 end
 if verbose
-    disp([char(datetime),'   Finished in ', num2str(round(tictoc,0)) ' seconds!'])
+    disp([char(datetime),'   Finished in ', num2str(round(tictoc,5)) ' seconds!'])
 end
 end

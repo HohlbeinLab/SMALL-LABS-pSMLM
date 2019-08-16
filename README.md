@@ -1,7 +1,3 @@
-# Edits Johannes lab
-
-Please read README.docx :)
-
 # SMALL-LABS
 
 The SMALL-LABS (Single-Molecule Accurate Localization by Local Background Subtraction) algorithm, accurately locates and measures the intensity of single molecules, regardless of the shape or brightness of the background.
