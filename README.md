@@ -1,3 +1,10 @@
+# SMALL-LABS-GUI
+
+By Koen Martens, Hohlbein Lab, Wageningen University, The Netherlands.
+Please see Quick start guide GUI.pdf for a quickstart.
+
+Run the GUI in MATLAB by ensuring that your current MATLAB working directory is the parent folder with the GUI_main.m file inside (so normally ...\Github\SMALL-LABS_Hohlbein_public). Then, run 'GUI_main' from the command-line.
+
 # SMALL-LABS
 
 The SMALL-LABS (Single-Molecule Accurate Localization by Local Background Subtraction) algorithm, accurately locates and measures the intensity of single molecules, regardless of the shape or brightness of the background.
