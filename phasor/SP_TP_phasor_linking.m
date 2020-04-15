@@ -9,6 +9,8 @@ function [finalarr] = SP_TP_phasor_linking(loc_list,maxdist)
 % Variables
 maxdist_secondaryDir = 1;
 maxDistMultiplier = 1.5;
+
+tryeverything = 0; %testing, if this is set to 1 it appears to almost go in inf loop
 %%
 global verbose
 if verbose
@@ -16,10 +18,17 @@ disp([char(datetime),'   Starting SP/TP phasor'])
 end
 % keyboard
 %% Loop over all frames
-    finalarr = [];
+counter = 1;
+    finalarr = zeros(size(loc_list,1),3);
+    acclist = accumarray(loc_list(:,1),1);
 for curframe = 1:max(loc_list(:,1))
     %Select localizations in current frame
-    tarr = loc_list(loc_list(:,1)==curframe,:);
+%     tarro = loc_list(loc_list(:,1)==curframe,:);
+    if curframe == 1
+        tarr = loc_list(1:acclist(curframe),:);
+    else
+        tarr = loc_list(1+sum(acclist(1:curframe-1)):sum(acclist(1:curframe)),:);
+    end
     %add ones (availability for linking) to all locs
     framearr = [tarr ones(size(tarr,1),1)];
 %     framearr = [1 5 5.11 1; 1 12 5.2 1; 1 22 5.1 1;];%Testing stuck
@@ -39,9 +48,11 @@ for curframe = 1:max(loc_list(:,1))
         end
     end
     allassigned = 0;
-    finalmidpointsforctPhasor = [];
+    counterfr = 1;
+%     finalmidpointsforctPhasor = [];
+    finalmidpointsforctPhasor = zeros(size(framearr,1),3);
     stuck = false;
-    while ((allassigned == 0) && (size(framearr,1)>0))
+    while ((allassigned == 0) && (size(framearr,1)>0) && (stuck == 0))
         %Get combinations that are valid
         validcombinations = ((DistanceX<maxdist_secondaryDir).*(DistanceY<maxdist.*maxDistMultiplier)+...
             (DistanceY<maxdist_secondaryDir).*(DistanceX<maxdist.*maxDistMultiplier)).*availablearr;
@@ -56,11 +67,16 @@ for curframe = 1:max(loc_list(:,1))
                 % unavailable for next iteration
                 correspondingrow = find(validcombinations(:,combcol)==1);
                 %Add the middle point between them for phasor
-                finalmidpointsforctPhasor = [finalmidpointsforctPhasor;...
-                    curframe... 
+%                 finalmidpointsforctPhasor = [finalmidpointsforctPhasor;...
+%                     curframe... 
+%                     framearr(combcol,2)*.5+framearr(correspondingrow,2)*.5 ...
+%                     framearr(combcol,3)*.5+framearr(correspondingrow,3)*.5 ...
+%                     ];
+                finalmidpointsforctPhasor(counterfr,:) = [curframe... 
                     framearr(combcol,2)*.5+framearr(correspondingrow,2)*.5 ...
                     framearr(combcol,3)*.5+framearr(correspondingrow,3)*.5 ...
                     ];
+                counterfr = counterfr+1;
                 %Set them as unavailable
                 availablearr(:,combcol) = 0;
                 availablearr(:,correspondingrow) = 0;
@@ -72,40 +88,51 @@ for curframe = 1:max(loc_list(:,1))
                 %assigned to another loc
                 if sum(availablearr(:,combcol))>0
                     %Add it for phasor
-                    finalmidpointsforctPhasor = [finalmidpointsforctPhasor;...
+%                     finalmidpointsforctPhasor = [finalmidpointsforctPhasor;...
+%                         curframe framearr(combcol,2) framearr(combcol,3)];
+                    finalmidpointsforctPhasor(counterfr,:) = [...
                         curframe framearr(combcol,2) framearr(combcol,3)];
+                    counterfr = counterfr+1;
                     %Set it as unavailable
                     availablearr(:,combcol) = 0;
                     availablearr(combcol,:) = 0;
                 end
             else
-                %only continue if it's stuck for a full loop
-                if stuck
-                    %get the one with the lowest displacement in the
-                    %low-displacement direction
-                    mininX = min(min(DistanceX(validcombinations>0)));
-                    mininY = min(min(DistanceY(validcombinations>0)));
-                    %link the ones with the lowest displacement
-                    if mininX < mininY
-                        [r,c] = ind2sub(size(DistanceX),min(find(DistanceX==mininX)));
-                    else
-                        [r,c] = ind2sub(size(DistanceY),min(find(DistanceY==mininY)));
+                if tryeverything == 1
+                    %only continue if it's stuck for a full loop
+                    if stuck
+                        %get the one with the lowest displacement in the
+                        %low-displacement direction
+                        mininX = min(min(DistanceX(validcombinations>0)));
+                        mininY = min(min(DistanceY(validcombinations>0)));
+                        %link the ones with the lowest displacement
+                        if mininX < mininY
+                            [r,c] = ind2sub(size(DistanceX),min(find(DistanceX==mininX)));
+                        else
+                            [r,c] = ind2sub(size(DistanceY),min(find(DistanceY==mininY)));
+                        end
+                        %Add the middle point between them for phasor
+    %                     finalmidpointsforctPhasor = [finalmidpointsforctPhasor;...
+    %                         curframe... 
+    %                         framearr(r,2)*.5+framearr(c,2)*.5 ...
+    %                         framearr(r,3)*.5+framearr(c,3)*.5 ...
+    %                         ];
+                        keyboard
+                        finalmidpointsforctPhasor(counterfr,:) = [curframe... 
+                            framearr(r,2)*.5+framearr(c,2)*.5 ...
+                            framearr(r,3)*.5+framearr(c,3)*.5 ...
+                            ];
+                        counterfr = counterfr+1;
+                        %Set them as unavailable
+                        availablearr(:,r) = 0;
+                        availablearr(:,c) = 0;
+                        availablearr(r,:) = 0;
+                        availablearr(c,:) = 0;
+                        break
                     end
-                    %Add the middle point between them for phasor
-                    finalmidpointsforctPhasor = [finalmidpointsforctPhasor;...
-                        curframe... 
-                        framearr(r,2)*.5+framearr(c,2)*.5 ...
-                        framearr(r,3)*.5+framearr(c,3)*.5 ...
-                        ];
-                    %Set them as unavailable
-                    availablearr(:,r) = 0;
-                    availablearr(:,c) = 0;
-                    availablearr(r,:) = 0;
-                    availablearr(c,:) = 0;
-                    break
                 end
             end
-            if sum(sum(availablearr))==0
+            if ~any(availablearr,'all')
                 allassigned = 1;
             end
         end
@@ -116,7 +143,9 @@ for curframe = 1:max(loc_list(:,1))
         end
     end
     clear tarr framearr
-    finalarr = [finalarr; finalmidpointsforctPhasor];
+    finalarr(counter:counter+size(finalmidpointsforctPhasor,1)-1,:) = finalmidpointsforctPhasor;%[finalarr; finalmidpointsforctPhasor];
+    counter = counter+size(finalmidpointsforctPhasor,1);
 end
+finalarr(finalarr(:,1)==0,:) = [];
 %% end function
 end

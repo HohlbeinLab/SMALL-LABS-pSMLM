@@ -708,8 +708,10 @@ else
                 %that (no idea why)
                 fits.offset = phasoroffset/1.2836-offset';
                 %x, y pos
-                fits.row=parameters(2,:)'+minxpos'+(dfrlmsz-phasorrad)+shiftonedge(:,1);%-phasorrad+molr-shiftonedge(:,1)*0;
-                fits.col=parameters(3,:)'+minypos'+(dfrlmsz-phasorrad)+shiftonedge(:,2);%-phasorrad+molc-shiftonedge(:,2)*0;
+%                 fits.row=parameters(2,:)'+minxpos'+(dfrlmsz-phasorrad)+shiftonedge(:,1);%-phasorrad+molr-shiftonedge(:,1)*0;
+%                 fits.col=parameters(3,:)'+minypos'+(dfrlmsz-phasorrad)+shiftonedge(:,2);%-phasorrad+molc-shiftonedge(:,2)*0;
+                fits.row=parameters(2,:)'+minxpos'+(dfrlmsz-phasorrad*2)+shiftonedge(:,1);%-phasorrad+molr-shiftonedge(:,1)*0;
+                fits.col=parameters(3,:)'+minypos'+(dfrlmsz-phasorrad*2)+shiftonedge(:,2);%-phasorrad+molc-shiftonedge(:,2)*0;
 %                 figure(1);clf(1);
 %                 scatter(fits.frame,phasormagnitudes(:,1)./phasormagnitudes(:,2))
 %                 axis([0 inf 0 3])
@@ -718,8 +720,8 @@ else
                 fits.col = [];
                 fits.frame = [];
                 fits.frame = phasordatapointstp(:,1);
-                fits.row = phasordatapointstp(:,2);
-                fits.col = phasordatapointstp(:,3);
+                fits.row = phasordatapointstp(:,3);%switching x and y?
+                fits.col = phasordatapointstp(:,2);
                 %set some values to 0 because they're unused and array size
                 %changes
                 shiftonedge = zeros(size(fits.frame,1),2);
@@ -731,16 +733,33 @@ else
                 clear phasordatasetsp
                 %Get bigger loc sizes
                 %loop over localizations
-                goodlist = [];
+%                 keyboard
+%                 tic
+%                 goodlist = [];
+%                 for locs = 1:size(phasordatapointstp,1)
+%                     try
+%                     phasordatasetsp(:,:,locs) = mov([round(phasordatapointstp(locs,2))-phasorradsp:round(phasordatapointstp(locs,2))+phasorradsp],...
+%                     [round(phasordatapointstp(locs,3))-phasorradsp:round(phasordatapointstp(locs,3))+phasorradsp],fits.frame(locs));
+%                     goodlist = [goodlist; locs];
+%                     catch
+% %                         fits.frame(locs) = 1
+%                     end
+%                 end
+%                 toc
+                
+                goodlist = [1:size(phasordatapointstp,1)]';
                 for locs = 1:size(phasordatapointstp,1)
                     try
-                phasordatasetsp(:,:,locs) = mov([round(phasordatapointstp(locs,2))-phasorradsp:round(phasordatapointstp(locs,2))+phasorradsp],...
+                    phasordatasetsp(:,:,locs) = mov([round(phasordatapointstp(locs,2))-phasorradsp:round(phasordatapointstp(locs,2))+phasorradsp],...
                     [round(phasordatapointstp(locs,3))-phasorradsp:round(phasordatapointstp(locs,3))+phasorradsp],fits.frame(locs));
-                    goodlist = [goodlist; locs];
+%                     goodlist = [goodlist; locs];
                     catch
+                        % it's too much on an edge, so remove it
+                        goodlist(locs) = -1;
 %                         fits.frame(locs) = 1
                     end
                 end
+                goodlist(goodlist==-1) = [];
                 fits.frame = fits.frame(goodlist);
                 fits.molid = [1:size(goodlist,1)]';
                 fits.amp = fits.amp(goodlist);
@@ -774,7 +793,9 @@ else
     if allparams.phasor_astig
         fits.zpos = phasorlocs(:,3)/1000; %nm to um
     end
-    
+     if allparams.phasor_SP || allparams.phasor_TP
+        fits.zpos = fits.zpos/1000; %nm to um
+    end
     fits.MagnX = phasormagnitudes(:,1);
     fits.MagnY = phasormagnitudes(:,2);
     %badfits = 1 if bad fit

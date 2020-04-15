@@ -1,4 +1,4 @@
-function guesses=Guessing(mov_fname,mov,movsz,goodframe,dfrlmsz,...
+function [guesses,roinum]=Guessing(mov_fname,mov,movsz,goodframe,dfrlmsz,...
     bpthrsh,egdesz,pctile_frame,debugmode,mask_fname,make_guessmovie,guessing_filter,allparams)
 %% Guessing
 % make a list of guesses for sinlge molecules. Using a bandpass filter to
@@ -98,7 +98,6 @@ end
 guesses=zeros(1,3);
 roinum=0;
 %% Guessing
-
 %making the phasemask logical map
 if ~isempty(mask_fname)
     if ischar(mask_fname)
@@ -134,7 +133,13 @@ if strcmp(guessing_filter,'bpass')
         bimgmov=zeros(movsz);
         goodfrmmov=false(movsz);
         %looping through and making the bandpassed movie
-        for ll=1:movsz(3)
+        if isempty(gcp('nocreate'))
+            numWorkers = 0;
+        else
+            parpoolinfo = gcp;
+            numWorkers = parpoolinfo.NumWorkers;
+        end
+        parfor(ll=1:movsz(3),numWorkers)
             if goodframe(ll)
                 goodfrmmov(:,:,ll)=true;
                 %padding the current frame to avoid the Fourier ringing
@@ -167,7 +172,101 @@ if strcmp(guessing_filter,'bpass')
         disp(['Making guesses movie for ',fname]);
     end
 
-    for ll=1:movsz(3)
+    %If not parrallel pool
+    if isempty(gcp('nocreate'))
+        [roinum, guesses] = nonparrGuessingbpass(movsz,goodframe,pctile_frame,mov,pdsz,dfrlmsz,bimgmov,allparams,debugmode,make_guessmovie,guesses,roinum,PhaseMask,1,movsz(3)); 
+    %If there is a parallel pool
+    else
+        parpoolinfo = gcp;
+        numWorkers = parpoolinfo.NumWorkers;
+        framestarts = round(linspace(1,movsz(3),numWorkers+1));
+        for k = 1:numWorkers
+            frameends(k) = framestarts(k+1)-1;
+        end
+        framestarts(end) = [];
+        frameends(end) = movsz(3);
+
+        parfor k = 1:numWorkers
+            [roinump{k}, guessesp{k}] = nonparrGuessingbpass(movsz,goodframe,pctile_frame,mov,pdsz,dfrlmsz,bimgmov,allparams,debugmode,make_guessmovie,guesses,roinum,PhaseMask,framestarts(k),frameends(k)); 
+        end
+
+        totlistlength = 0;
+        for k = 1:numWorkers
+            totlistlength = totlistlength+size((guessesp{k}),1)-1;
+        end
+        guesses = zeros(totlistlength+1,3);
+        roinum = zeros(totlistlength+1,1);
+        counter = 2;
+        for k = 1:numWorkers
+            guesses(counter:counter+size(cell2mat(guessesp(k)),1)-1-1,:) = guessesp{k}(2:end,:);
+            roinum(counter:counter+size(cell2mat(guessesp(k)),1)-1-1,:) = roinump{k}(2:end,:);
+            counter = counter+size(cell2mat(guessesp(k)),1)-1;
+        end
+     %end ifstatement parallel pool
+    end
+elseif strcmp(guessing_filter,'wavelet')
+    %Do wavelet filter on all frames - roughly 2x faster as per-frame
+    [allfrmwvlt,V1,V2]=mywaveletfilteratrousNdim(single(mov)-mean(mean(single(mov))),1);
+    
+    if make_guessmovie
+        figure();
+        v = VideoWriter([pathstr,filesep,fname,'_Guesses.avi'],'Uncompressed AVI');
+        open(v);
+
+        disp(['Making guesses movie for ',fname]);
+    end
+    
+    %If not parrallel pool
+    if isempty(gcp('nocreate'))
+        [roinum, guesses] = nonparrGuessingwvlt(allfrmwvlt,movsz,goodframe,pctile_frame,mov,pdsz,dfrlmsz,allparams,debugmode,make_guessmovie,guesses,roinum,PhaseMask,1,movsz(3)); 
+    %If there is a parallel pool
+    else
+        parpoolinfo = gcp;
+        numWorkers = parpoolinfo.NumWorkers;
+        framestarts = round(linspace(1,movsz(3),numWorkers+1));
+        for k = 1:numWorkers
+            frameends(k) = framestarts(k+1)-1;
+        end
+        framestarts(end) = [];
+        frameends(end) = movsz(3);
+        parfor k = 1:numWorkers
+            [roinump{k}, guessesp{k}] =nonparrGuessingwvlt(allfrmwvlt,movsz,goodframe,pctile_frame,mov,pdsz,dfrlmsz,allparams,debugmode,make_guessmovie,guesses,roinum,PhaseMask,framestarts(k),frameends(k)); 
+        end
+
+        totlistlength = 0;
+        for k = 1:numWorkers
+            totlistlength = totlistlength+size((guessesp{k}),1)-1;
+        end
+        guesses = zeros(totlistlength+1,3);
+        roinum = zeros(totlistlength+1,1);
+        counter = 2;
+        for k = 1:numWorkers
+            guesses(counter:counter+size(cell2mat(guessesp(k)),1)-1-1,:) = guessesp{k}(2:end,:);
+            roinum(counter:counter+size(cell2mat(guessesp(k)),1)-1-1,:) = roinump{k}(2:end,:);
+            counter = counter+size(cell2mat(guessesp(k)),1)-1;
+        end
+    %end ifstatement parallel pool
+    end
+end
+    
+guesses=guesses(2:end,:);%get rid of first row of zeros
+roinum(1)=[];
+if make_guessmovie
+    close(v)
+end
+
+tictoc=toc;%the time to run the entire program
+
+if allparams.saveloadmat
+[pathstr,name,~] = fileparts([mov_fname '.mat']);
+save([pathstr,filesep,name,'_guesses.mat'],'guesses','goodframe','dfrlmsz','egdesz','pctile_frame','bpthrsh',...
+    'movsz','tictoc','mask_fname','roinum','-v7.3');
+end
+
+end
+
+function [roinum, guesses] = nonparrGuessingbpass(movsz,goodframe,pctile_frame,mov,pdsz,dfrlmsz,bimgmov,allparams,debugmode,make_guessmovie,guesses,roinum,PhaseMask,beginframe,endframe)
+    for ll=beginframe:endframe
         if goodframe(ll)
             %using the percentile on each frame
             if pctile_frame
@@ -199,7 +298,7 @@ if strcmp(guessing_filter,'bpass')
             bw2=bwpropfilt(logim,'EquivDiameter',[floor(allparams.dfrlmsz_float/2),2*allparams.dfrlmsz_float]);
             rgps=regionprops(bw2,'centroid');% find the centroids of those shapes
             centroids = cat(1, rgps.Centroid);%just rearraging the array
-            
+
             %filling the array for this frame
             if ~isempty(centroids)
                 guesses=cat(1,guesses,[repmat(ll,size(centroids(:,2))),round(centroids(:,2)),round(centroids(:,1))]);
@@ -218,6 +317,7 @@ if strcmp(guessing_filter,'bpass')
                 end
                 if debugmode
                     title([fname,'   frame ',num2str(ll)],'Interpreter','none')
+                    drawnow
                 elseif make_guessmovie
                     frame = getframe;
                     writeVideo(v,frame);
@@ -225,33 +325,40 @@ if strcmp(guessing_filter,'bpass')
             end
         end
     end
-elseif strcmp(guessing_filter,'wavelet')
-    %Do wavelet filter on all frames - roughly 2x faster as per-frame
-    [allfrmwvlt,V1,V2]=mywaveletfilteratrousNdim(single(mov)-mean(mean(single(mov))),1);
-    
-    
-    if make_guessmovie
-        figure();
-        v = VideoWriter([pathstr,filesep,fname,'_Guesses.avi'],'Uncompressed AVI');
-        open(v);
+end
 
-        disp(['Making guesses movie for ',fname]);
-    end
-    
-    for ll=1:movsz(3)
+
+
+
+
+
+function [roinum, guesses] = nonparrGuessingwvlt(allfrmwvlt,movsz,goodframe,pctile_frame,mov,pdsz,dfrlmsz,allparams,debugmode,make_guessmovie,guesses,roinum,PhaseMask,beginframe,endframe)
+    for ll=beginframe:endframe
         if goodframe(ll)
             %Get wavelet of this frame
             curfrmwvlt = allfrmwvlt(:,:,ll);
             %get std
             stdwvlt = std(reshape(curfrmwvlt,movsz(1)*movsz(2),1),0,1);
             %make boolean im where val is larger than Xx std?
+            
+            %Replaced original code with ~ 16% speed increase (KM)
             logimwvlt = logical(curfrmwvlt>=stdwvlt*allparams.wvltfilter_std);
-            %search for shapes with an EquivDiameter of floor(dfrlmsz/X) to
-            %X*dfrlmsz
             sizerangeeqvdiam = 1.5; %2 standard, 1.5 seems to work better?
             bw2=bwpropfilt(logimwvlt,'EquivDiameter',[floor(allparams.dfrlmsz_float/sizerangeeqvdiam),sizerangeeqvdiam*allparams.dfrlmsz_float]);
-            rgps=regionprops(bw2,'centroid');% find the centroids of those shapes
-            centroids = cat(1, rgps.Centroid);%just rearraging the array
+            %findpeaks method
+            cent = FastPeakFind(single(bw2.*curfrmwvlt));
+            centroids = [cent(1:2:end),cent(2:2:end)];
+            
+            %Original code here for keepsakes------------
+%             logimwvlt = logical(curfrmwvlt>=stdwvlt*allparams.wvltfilter_std);
+%             %search for shapes with an EquivDiameter of floor(dfrlmsz/X) to
+%             %X*dfrlmsz
+%             sizerangeeqvdiam = 1.5; %2 standard, 1.5 seems to work better?
+%             bw2=bwpropfilt(logimwvlt,'EquivDiameter',[floor(allparams.dfrlmsz_float/sizerangeeqvdiam),sizerangeeqvdiam*allparams.dfrlmsz_float]);
+%             rgps=regionprops(bw2,'centroid');% find the centroids of those shapes
+%             centroids = cat(1, rgps.Centroid);%just rearraging the array
+            %End original code-------------------
+             
             %filling the array for this frame
             if ~isempty(centroids)
                 guesses=cat(1,guesses,[repmat(ll,size(centroids(:,2))),round(centroids(:,2)),round(centroids(:,1))]);
@@ -260,9 +367,7 @@ elseif strcmp(guessing_filter,'wavelet')
             
             
             if debugmode || make_guessmovie %plot the guesses, for checking parameters
-                if ~pctile_frame
-                    curfrm=mov(:,:,ll);
-                end
+                curfrm=mov(:,:,ll);
                 imshow(double(curfrm),prctile(double(curfrm(curfrm>0)),[.1,99.8]))
                 if ~isempty(centroids)
                     %viscircles is reversed
@@ -271,6 +376,7 @@ elseif strcmp(guessing_filter,'wavelet')
                 end
                 if debugmode
                     title([fname,'   frame ',num2str(ll)],'Interpreter','none')
+                    drawnow
                 elseif make_guessmovie
                     frame = getframe;
                     writeVideo(v,frame);
@@ -279,24 +385,6 @@ elseif strcmp(guessing_filter,'wavelet')
         end
     end
 end
-    
-guesses=guesses(2:end,:);%get rid of first row of zeros
-roinum(1)=[];
-if make_guessmovie
-    close(v)
-end
-
-tictoc=toc;%the time to run the entire program
-
-[pathstr,name,~] = fileparts([mov_fname '.mat']);
-save([pathstr,filesep,name,'_guesses.mat'],'guesses','goodframe','dfrlmsz','egdesz','pctile_frame','bpthrsh',...
-    'movsz','tictoc','mask_fname','roinum','-v7.3');
-
-end
-
-
-
-
 
 
 

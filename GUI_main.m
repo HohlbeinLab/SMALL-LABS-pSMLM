@@ -7,7 +7,7 @@ function varargout = GUI_main(varargin)
 
 % Edit the above text to modify the response to help GUI_main
 
-% Last Modified by GUIDE v2.5 16-Aug-2019 17:00:03
+% Last Modified by GUIDE v2.5 17-Sep-2019 18:16:40
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -37,7 +37,10 @@ fullpath = mfilename('fullpath');
 fullpath = extractBefore(fullpath,'GUI_main');
 addpath(genpath(fullpath));
 handles.GUIsettingssavelocation = [fullpath 'GUIStoredSettings.mat'];
-
+%hide loadbar axis
+% set(handles.axes1,'visible', 'off');
+axis(handles.axes1);
+axis off
 try
     %Following line throws errors, might be fixed via setappdata, getappdata
     load(handles.GUIsettingssavelocation,'fvals_to_save');
@@ -81,7 +84,6 @@ function pushbutton1_Callback(hObject, eventdata, handles)
 disp(' ');
 disp(' ');
 disp([char(datetime),'   Starting SMALLLABS_JH from GUI'])
-
 fnames = fieldnames(handles);
 fvals = struct2cell(handles);
 fvals_to_save = {};
@@ -143,8 +145,20 @@ switch phasorType
         phasor_SP = 0;
         phasor_TP = 1;   
 end
-% run program
-SMALLLABS_main(handles.filepath.String,str2num(handles.dfrlmsz_edit.String),...
+% run program - batch if necessary
+%Check if batch
+if ~isempty(handles.uipanel1.UserData) %if this is true, then it's batch
+    batchsize = size(handles.uipanel1.UserData{1,1},2);
+    for k = 1:batchsize
+        fullfilepath{1,k} =  [char(handles.uipanel1.UserData{1,2}) char(handles.uipanel1.UserData{1,1}(k))];
+    end
+    
+else
+    batchsize = 1;
+    fullfilepath{1,1} = handles.filepath.String;
+end
+for batchiteration = 1:batchsize
+SMALLLABS_main(fullfilepath{1,batchiteration},str2num(handles.dfrlmsz_edit.String),...
     str2num(handles.avgwin_edit.String), str2num(handles.moloffwin_edit.String),...
     'bgsub',handles.bgsub_chk.Value,...
     'makeAvgsub',handles.bgsub_chk.Value,...%handles.makeavgsubmovie_chk.Value,...
@@ -175,7 +189,7 @@ SMALLLABS_main(handles.filepath.String,str2num(handles.dfrlmsz_edit.String),...
     'avgshifthist_res',str2num(handles.avgshifthist_res_edit.String),...
     'avgshifthist_lateralsubpix',str2num(handles.avgshfthist_latsubpx_edit.String),...
     'avgshifthist_lateralshifts',str2num(handles.avgshifthist_latshift_edit.String),...
-    'avgshifthist_axialcolnrs',50,...%str2num(handles.avgshfthist_axcolnr_edit.String),...
+    'avgshifthist_axialcolnrs',20,...%str2num(handles.avgshfthist_axcolnr_edit.String),...
     'avgshifthist_pixelsize',str2num(handles.pxsize_edit.String),...
     'fullmovie',fullmovie,...
     'nrframes',str2num(handles.edit_nrframes.String),...
@@ -192,7 +206,11 @@ SMALLLABS_main(handles.filepath.String,str2num(handles.dfrlmsz_edit.String),...
     'driftcorrcc_lateralsubpix',str2num(handles.edit_driftcorrcc_latsubpix.String),...
     'dirftcorrcc_temporalbins',str2num(handles.edit_driftcorrcc_tempbins.String),...
     'trackparams',[str2num(handles.edit_tracking1.String) str2num(handles.edit_tracking2.String) str2num(handles.edit_tracking3.String) str2num(handles.edit_tracking4.String) str2num(handles.edit_tracking5.String) str2num(handles.edit_tracking6.String) str2num(handles.edit_tracking7.String)],...
-    'makeThSTORMoutput',handles.checkbox_ThStorm.Value);
+    'makeThSTORMoutput',handles.checkbox_ThStorm.Value,...
+    'saveloadmat',handles.checkbox_savemat.Value,...
+    'useGUI',1,...
+    'handles',handles);
+end
 
 % --- Executes on button press in bgsub_chk.
 function bgsub_chk_Callback(hObject, eventdata, handles)
@@ -432,7 +450,9 @@ if (file_calibmovie~=0)
             'fit_ang',0,...
             'driftcorr_cc',0,...
             'driftcorrcc_lateralsubpix',0,...
-            'dirftcorrcc_temporalbins',0);
+            'dirftcorrcc_temporalbins',0,...
+            'useGUI',1,...
+            'handles',handles);
         %Read resulting .mat data
         load([path_calibmovie file_calibmovie(1:end-4) '_fits.mat']);
         input = [fits.frame,fits.col,fits.row zeros(size(fits.frame,1),2)];
@@ -503,12 +523,15 @@ if (file_calibmovie~=0)
             'fit_ang',0,...
             'driftcorr_cc',0,...
             'driftcorrcc_lateralsubpix',0,...
-            'dirftcorrcc_temporalbins',0);
+            'dirftcorrcc_temporalbins',0,...
+            'useGUI',1,...
+    'handles',handles);
         %Read resulting .mat data
-        load([path_calibmovie file_calibmovie(1:end-5) '_fits.mat']);
+        fileextstartpos = (strfind(file_calibmovie,'.tif'));
+        load([path_calibmovie file_calibmovie(1:fileextstartpos-1) '_fits.mat']);
         
         %open movie file again
-        mov = TiffLoader([path_calibmovie,file_calibmovie]);
+        mov = TiffLoader_SL([path_calibmovie,file_calibmovie]);
         
         %some variables
         ROIsize = (str2num(handles.phasor_SP_rad_edit.String)*2+1);
@@ -604,12 +627,14 @@ if (file_calibmovie~=0)
             'fit_ang',0,...
             'driftcorr_cc',0,...
             'driftcorrcc_lateralsubpix',0,...
-            'dirftcorrcc_temporalbins',0);
+            'dirftcorrcc_temporalbins',0,...
+            'useGUI',1,...
+            'handles',handles);
         %Read resulting .mat data
         load([path_calibmovie file_calibmovie(1:end-5) '_fits.mat']);
         
         %open movie file again
-        mov = TiffLoader([path_calibmovie,file_calibmovie]);
+        mov = TiffLoader_SL([path_calibmovie,file_calibmovie]);
         
         %some variables
         ROIsize = (str2num(handles.phasor_TP_rad_edit.String)*2+1);
@@ -740,13 +765,15 @@ if (file_calibmovie~=0)
             'fit_ang',0,...
             'driftcorr_cc',0,...
             'driftcorrcc_lateralsubpix',0,...
-            'dirftcorrcc_temporalbins',0);
+            'dirftcorrcc_temporalbins',0,...
+            'useGUI',1,...
+            'handles',handles);
         %Read resulting .mat data
-%         keyboard
-        load([path_calibmovie file_calibmovie(1:end-4) '_fits.mat']);
+        fileextstartpos = (strfind(file_calibmovie,'.tif'));
+        load([path_calibmovie file_calibmovie(1:fileextstartpos-1) '_fits.mat']);
         
         %open movie file again
-        mov = TiffLoader([path_calibmovie,file_calibmovie]);
+        mov = TiffLoader_SL([path_calibmovie,file_calibmovie]);
         
         %some variables
         ROIsize = (str2num(handles.phasor_rad_edit.String)*2+1);
@@ -1024,13 +1051,21 @@ else
 end
 curfldr = pwd;
 cd(fldrstrt)
-[file,path] = uigetfile('*.*');
+[file,path] = uigetfile('*.*','MultiSelect', 'on');
 cd(curfldr) 
-   
 if ~isequal(file,0)
-    eval(['handles.',handlename,'.String = ''',path,file,''';']) ; 
-%     strcat("handles.",string(handlename),".String{1,1}") = [path file];%strcat('handles.',string(handlename),'.String{1,1}') = [path file];
+    if (size(file,2) > 1 && iscell(file)) %if batching
+        eval(['handles.',handlename,'.String = "Multiple Files";']) ;
+        handles.uipanel1.UserData = {file path};
+    else
+        handles.uipanel1.UserData = {};
+        eval(['handles.',handlename,'.String = ''',path,file,''';']) ;
+        %     strcat("handles.",string(handlename),".String{1,1}") = [path file];%strcat('handles.',string(handlename),'.String{1,1}') = [path file];
+    end
+else
+    handles.uipanel1.UserData = {};
 end
+
 
 
 function [file,path]=folderselecttowrite(handles,handlename,ext,title)
@@ -1090,3 +1125,12 @@ function checkbox_ThStorm_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 % Hint: get(hObject,'Value') returns toggle state of checkbox_ThStorm
+
+
+% --- Executes on button press in checkbox_savemat.
+function checkbox_savemat_Callback(hObject, eventdata, handles)
+% hObject    handle to checkbox_savemat (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of checkbox_savemat

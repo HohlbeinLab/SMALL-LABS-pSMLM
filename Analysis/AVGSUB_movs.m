@@ -1,4 +1,4 @@
-function  bgsub_mov=AVGSUB_movs(filename,mov,goodframe,do_avg,subwidth,offset)
+function  bgsub_mov=AVGSUB_movs(filename,mov,goodframe,do_avg,subwidth,offset,savemat)
 %% AVGSUB_tiffs
 % updated BPI 3/10/18 This function does average (or median) subtraction
 % of a movie.
@@ -67,8 +67,9 @@ tictoc=toc;%the time to do the calculations
 % convert to int16 and rename for saving
 mov=int16(bgsub_mov);
 % save the movie and the parameters
+if savemat
 save([pathstr,filesep,fname,'_avgsub.mat'],'mov','goodframe','do_avg','subwidth','offset','tictoc','-v7.3')
-
+end
 %this is the old tif saving code, commented out for now
 % options.overwrite=true;
 % %save using saveastiff

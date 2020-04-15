@@ -1,4 +1,4 @@
-function off_frames=Mol_off_frames(guessfname,guesses,goodframe,movsz,dfrlmsz,moloffwin)
+function off_frames=Mol_off_frames(guessfname,guesses,goodframe,movsz,dfrlmsz,moloffwin,saveloadmat)
 %% Mol_off_frames
 % Identifies frames in which two localized molecules are within a 2xdfrlmsz
 % sized box of each other using guess results from an average subtracted
@@ -122,11 +122,12 @@ for ii=1:movsz(3)
             % think it's needed and there is a big speed boost from leaving
             % it out. Please let me know if you find that this is needed.
             %off_frames{jj}=frmlst(~ismembc(frmlst,guesses(unique(mols2frms(dists,1)),1)));
-            
+            warning('off','backtrace')
             if length(off_frames{jj})<(0.05*moloffwin)
-                warning(['Guess ',num2str(jj),' only has ',...
-                    num2str(length(off_frames{jj})),' off frames. Consider increasing moloffwin'])
+%                 warning(['Guess ',num2str(jj),' only has ',...
+%                     num2str(length(off_frames{jj})),' off frames. Consider increasing moloffwin'])
             end
+            warning('on','backtrace')
         end
     end
 end
@@ -134,6 +135,7 @@ end
 tictoc=toc;%the time to run the entire program
 
 %save the data
+if saveloadmat
 save([pathstr,filesep,fname,'_Mol_off_frames.mat'],'off_frames','dfrlmsz','moloffwin','movsz','tictoc','-v7.3')
-
+end
 end

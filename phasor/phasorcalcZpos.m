@@ -14,6 +14,8 @@ zpos_XY = (sqrt((-27.*a.^2.*d + 27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^2 + 4.*(3.*
     27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^(1./3)./(3.*2.^(1./3).*a) - (2.^(1./3).*(3.*a.*c - b.^2))./...
     (3.*a.*(sqrt((-27.*a.^2.*d + 27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^2 + 4.*(3.*a.*c - b.^2).^3) - ...
     27.*a.^2.*d + 27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^(1./3)) - b./(3.*a);
+%Remove complex entries
+zpos_XY(abs(real(zpos_XY))~=abs(zpos_XY)) = 0;
 %Then all Y/X
 a = astig_phasor_curveYX.a;
 b = astig_phasor_curveYX.b;
@@ -24,10 +26,12 @@ zpos_YX = (sqrt((-27.*a.^2.*d + 27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^2 + 4.*(3.*
     27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^(1./3)./(3.*2.^(1./3).*a) - (2.^(1./3).*(3.*a.*c - b.^2))./...
     (3.*a.*(sqrt((-27.*a.^2.*d + 27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^2 + 4.*(3.*a.*c - b.^2).^3) - ...
     27.*a.^2.*d + 27.*a.^2.*y + 9.*a.*b.*c - 2.*b.^3).^(1./3)) - b./(3.*a);
+%Remove complex entries
+zpos_YX(abs(real(zpos_YX))~=abs(zpos_YX)) = 0;
 %Then choose XY or YX
 zpos = zpos_XY;
 zpos(sigma(:,2)>sigma(:,1)) = zpos_YX(sigma(:,2)>sigma(:,1));
-zpos = zpos*1000; %um to nm
+zpos = real(zpos*1000); %um to nm
 
 %read calibration YAML file
 % fileID = fopen(calibrationFile);

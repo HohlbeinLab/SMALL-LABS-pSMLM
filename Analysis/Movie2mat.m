@@ -1,4 +1,4 @@
-function Movie2mat(file_or_directory_name,varargin)
+function mov = Movie2mat(file_or_directory_name,params,varargin)
 %% Movie2mat
 % Converts movie(s) to a .mat file containing the movie as a variable
 % called mov
@@ -45,109 +45,137 @@ function Movie2mat(file_or_directory_name,varargin)
 %
 %
 %% Setup
-tic
-% check if it's a directory or a file
-if exist(file_or_directory_name)==7
-    %Select movies with uigetfile. If you make an error in specifying the
-    %directory, it opens in the current directory.
-    disp('Select the movie(s)')
+%Store data or note
+datastorage = 1;
+if params.saveloadmat == 0
+    datastorage = 0;
+end
+%For now, just do something else entirely when I don't want to store the
+%data
+if datastorage == 0
+    % check if it's a directory or a file
     try
-        [datalist,dataloc,findex]=uigetfile([file_or_directory_name,filesep,'*.*'],'multiselect','on');
-    catch
-        curdir=pwd;
-        [datalist,dataloc,findex]=uigetfile([curdir,filesep,'*.*'],'multiselect','on');
-    end
-    if findex==0
-        error('No movies selected')
-    end
-    %convert to a list of directories and filenames
-    if ~iscell(datalist); datalist={datalist}; end
-    for ii=1:numel(datalist); datalist{ii}=[dataloc datalist{ii}]; end
-    [dlocs,dnames,exts]=cellfun(@fileparts,datalist,'uniformoutput',false);
-elseif exist(file_or_directory_name)==2
-    %get the directory and filename, and format into the cell list as above
-    [dname,fname,ext] = fileparts(file_or_directory_name);
-    dlocs{1}=dname;
-    dnames{1}=fname;
-    exts{1}=ext;
-    clear dname fname ext
-else
-    error('Please input either a directory name or a filename.')
-end
-
-% try to add bio-formats matlab directory to path
-try
-    addpath(genpath('bfmatlab'))
-end
-
-%% Read the movies and save the .mat file
-
-%KM: checks if there is a min/max frame required
-fullmovieanalysis = 1;
-if nargin > 1
-    framearrlist = varargin(1);
-    startframe = framearrlist{1,1}(1);
-    endframe = framearrlist{1,1}(2);
-    fullmovieanalysis = 0;
-end
-
-for ii=1:numel(dlocs)
-    %the full filename
-    filename=[dlocs{ii},filesep,dnames{ii},exts{ii}];
-    
-    %check if it's a .mat file
-    if strcmp(exts{ii},'.mat')
-        isv73=getmatver([dlocs{ii},filesep,dnames{ii},exts{ii}]);
-        if ~isv73
-            error(['Please ensure that movie .mat files are version 7.3 and ',...
-                'the movie data is saved in the ''mov'' variable.'])
+        fullmovieanalysis = 1;
+        if nargin > 2
+            framearrlist = varargin(1);
+            startframe = framearrlist{1,1}(1);
+            endframe = framearrlist{1,1}(2);
+            fullmovieanalysis = 0;
         end
+        if fullmovieanalysis
+            mov = TiffLoader_SL(file_or_directory_name);
+        else
+            mov = TiffLoader_SL(file_or_directory_name,[startframe,endframe]);
+        end
+    catch
+        load(file_or_directory_name);
+    end
+else %original code
+    tic
+    % check if it's a directory or a file
+    if exist(file_or_directory_name)==7
+        %Select movies with uigetfile. If you make an error in specifying the
+        %directory, it opens in the current directory.
+        disp('Select the movie(s)')
+        try
+            [datalist,dataloc,findex]=uigetfile([file_or_directory_name,filesep,'*.*'],'multiselect','on');
+        catch
+            curdir=pwd;
+            [datalist,dataloc,findex]=uigetfile([curdir,filesep,'*.*'],'multiselect','on');
+        end
+        if findex==0
+            error('No movies selected')
+        end
+        %convert to a list of directories and filenames
+        if ~iscell(datalist); datalist={datalist}; end
+        for ii=1:numel(datalist); datalist{ii}=[dataloc datalist{ii}]; end
+        [dlocs,dnames,exts]=cellfun(@fileparts,datalist,'uniformoutput',false);
+    elseif exist(file_or_directory_name)==2
+        %get the directory and filename, and format into the cell list as above
+        [dname,fname,ext] = fileparts(file_or_directory_name);
+        dlocs{1}=dname;
+        dnames{1}=fname;
+        exts{1}=ext;
+        clear dname fname ext
     else
+        error('Please input either a directory name or a filename.')
+    end
+    
+    % try to add bio-formats matlab directory to path
+    try
+        addpath(genpath('bfmatlab'))
+    end
+    
+    %% Read the movies and save the .mat file
+    
+    %KM: checks if there is a min/max frame required
+    fullmovieanalysis = 1;
+    if nargin > 2
+        framearrlist = varargin(1);
+        startframe = framearrlist{1,1}(1);
+        endframe = framearrlist{1,1}(2);
+        fullmovieanalysis = 0;
+    end
+    
+    for ii=1:numel(dlocs)
+        %the full filename
+        filename=[dlocs{ii},filesep,dnames{ii},exts{ii}];
         
-        %setup the matfile
-        mov='tempvariable';
-        save([dlocs{ii},filesep,dnames{ii}],'mov','-v7.3');
-        matio=matfile([dlocs{ii},filesep,dnames{ii},'.mat']);
-        matio.Properties.Writable=true;
-        
-        %check how big the file is and compare to the available memory so
-        %as to keep this moving quickly and avoid going into the swap the
-        %size of the current movie
-        fmem=dir(filename);
-        fmem=fmem.bytes;
-        %the currently available memory
-        [~,curmem]=memory;
-        curmem=curmem.PhysicalMemory.Available;
-        %determine a reasonable number of chunks to import by comparing the
-        %filesize to 90% of the available memory
-        numchunks=floor(fmem/(0.9*curmem))+1;
-        
-        %% go through and import the different filetypes
-        %if it's a .tif stack use TIFFStack
-        if strcmp(exts{ii},'.tif') || strcmp(exts{ii},'.tiff')
-            global verbose
-            if verbose
-            disp([char(datetime),'   Starting conversion of TIFF to MAT '])
-            end
-            %creat the TIFFStack object
-%             tfstk=TIFFStack(filename);
-            if fullmovieanalysis
-                tfstk = TiffLoader(filename);
-                movsz=size(tfstk);%the size of the movie
+        %check if it's a .mat file
+        if strcmp(exts{ii},'.mat')
+            isv73=getmatver([dlocs{ii},filesep,dnames{ii},exts{ii}]);
+            if ~isv73
+                error(['Please ensure that movie .mat files are version 7.3 and ',...
+                    'the movie data is saved in the ''mov'' variable.'])
             else
-                tfstk = TiffLoader(filename,[startframe,endframe]);
-                movsz = size(tfstk);
+                load([dlocs{ii},filesep,dnames{ii},exts{ii}]);
             end
-            %create the .mat file and the variable mov
-            mov=zeros(movsz);%create the correct sized array
-            %determine the image type by querying a single pixel of the
-            %movie
-            imtype=class(tfstk(1));
-            %convert mov to the appropriate type
-            mov=eval([imtype,'(mov)']);
-            %overwrite the temp variable with the empty mov
-            matio.mov=mov;
-%             if fullmovieanalysis
+        else
+            
+            %setup the matfile
+            mov='tempvariable';
+            save([dlocs{ii},filesep,dnames{ii}],'mov','-v7.3');
+            matio=matfile([dlocs{ii},filesep,dnames{ii},'.mat']);
+            matio.Properties.Writable=true;
+            
+            %check how big the file is and compare to the available memory so
+            %as to keep this moving quickly and avoid going into the swap the
+            %size of the current movie
+            fmem=dir(filename);
+            fmem=fmem.bytes;
+            %the currently available memory
+            [~,curmem]=memory;
+            curmem=curmem.PhysicalMemory.Available;
+            %determine a reasonable number of chunks to import by comparing the
+            %filesize to 90% of the available memory
+            numchunks=floor(fmem/(0.9*curmem))+1;
+            
+            %% go through and import the different filetypes
+            %if it's a .tif stack use TIFFStack
+            if strcmp(exts{ii},'.tif') || strcmp(exts{ii},'.tiff')
+                global verbose
+                if verbose
+                    disp([char(datetime),'   Starting conversion of TIFF to MAT '])
+                end
+                %creat the TIFFStack object
+                %             tfstk=TIFFStack(filename);
+                if fullmovieanalysis
+                    tfstk = TiffLoader_SL(filename);
+                    movsz=size(tfstk);%the size of the movie
+                else
+                    tfstk = TiffLoader_SL(filename,[startframe,endframe]);
+                    movsz = size(tfstk);
+                end
+                %create the .mat file and the variable mov
+                mov=zeros(movsz);%create the correct sized array
+                %determine the image type by querying a single pixel of the
+                %movie
+                imtype=class(tfstk(1));
+                %convert mov to the appropriate type
+                mov=eval([imtype,'(mov)']);
+                %overwrite the temp variable with the empty mov
+                matio.mov=mov;
+                %             if fullmovieanalysis
                 chunklen=ceil(movsz(3)/numchunks);%the number of frames for each chunk
                 for jj=1:numchunks
                     if jj~=numchunks
@@ -156,38 +184,39 @@ for ii=1:numel(dlocs)
                         matio.mov(:,:,((jj-1)*chunklen+1):end)=tfstk(:,:,((jj-1)*chunklen+1):end);
                     end
                 end
-%             else
-%                 matio.mov = tfstk(:,:,startframe:endframe);
-%             end
-            % add future elseif statements here for instance: elseif
-            % strcmp(ext{ii},'.h5')
-        else
-            try
-                clear mov
-                %try using the bio-formats reader
-                mov=bfopen(filename);
-                matio.mov=cat(3,mov{1,1}{:,1});
-            catch
+                %             else
+                %                 matio.mov = tfstk(:,:,startframe:endframe);
+                %             end
+                % add future elseif statements here for instance: elseif
+                % strcmp(ext{ii},'.h5')
+            else
                 try
                     clear mov
-                    %try using Matlab's built in Matlab's built in
-                    %VideoReader utility
-                    vid = VideoReader(filename);    
-                    %Read all video frames.
-                    jj=1;%frame index
-                    while hasFrame(vid)
-                        curframe= readFrame(vid);
-                        if numel(size(curframe))==3
-                            curframe=mean(curframe,3);
-                        end
-                        mov(:,:,jj) = curframe;
-                        jj=jj+1;
-                    end
-                    %save it
-                    matio.mov=mov;
-                    
+                    %try using the bio-formats reader
+                    mov=bfopen(filename);
+                    matio.mov=cat(3,mov{1,1}{:,1});
                 catch
-                    error('Unable to read in the file. Please use a supported format, or update Movie2mat.mat for this format')
+                    try
+                        clear mov
+                        %try using Matlab's built in Matlab's built in
+                        %VideoReader utility
+                        vid = VideoReader(filename);
+                        %Read all video frames.
+                        jj=1;%frame index
+                        while hasFrame(vid)
+                            curframe= readFrame(vid);
+                            if numel(size(curframe))==3
+                                curframe=mean(curframe,3);
+                            end
+                            mov(:,:,jj) = curframe;
+                            jj=jj+1;
+                        end
+                        %save it
+                        matio.mov=mov;
+                        
+                    catch
+                        error('Unable to read in the file. Please use a supported format, or update Movie2mat.mat for this format')
+                    end
                 end
             end
         end
@@ -196,7 +225,9 @@ end
 
 % try to remove bio-formats matlab directory to path
 try
+    warning('off')
     rmpath(genpath('bfmatlab'))
+    warning('on')
 end
 
 %check if it's a version 7.3 matfile.
@@ -204,5 +235,4 @@ end
         x = evalc(['type(''', fname, ''')']);
         isv73 = strcmp(x(2:20), 'MATLAB 7.3 MAT-file');
     end
-
 end

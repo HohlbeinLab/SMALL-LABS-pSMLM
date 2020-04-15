@@ -37,7 +37,6 @@ function [totimarr] = avgshifthist(fits,params,movsz,prefilename,imagegen)
                 %add in bins around
                 for xxbin = max(xbin-latshifts/2,1):min(xbin+latshifts/2,(movsz(1)-edgeval*2)*histsubpix)
                     for yybin = max(ybin-latshifts/2,1):min(ybin+latshifts/2,(movsz(2)-edgeval*2)*histsubpix)
-                        
                         avgshhist(xxbin,yybin,zbin) = avgshhist(xxbin,yybin,zbin)+latshifts-(sqrt((xxbin-xbin)^2)+sqrt((yybin-ybin)^2));
 %                         tic
 %                         for i = 1:10000
@@ -152,5 +151,6 @@ function [totimarr] = avgshifthist(fits,params,movsz,prefilename,imagegen)
         end
     catch
         fprintf('Some error occured in avgshifthist making\n')
+        keyboard
     end
 end

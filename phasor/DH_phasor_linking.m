@@ -191,32 +191,42 @@ for frame = 1:max(loc_list(:,1))
         %Loop for all the possibilities that are not yet linked
         stuck = 0;
         poss_old = possibilities;
+        for ii = 1:size(possibilities,1)
+            if ii ~= [possibilities{ii,1}]
+                keyboard
+                %IF THIS KEYBOARD IS EVER CALLED, LINE 118 and 117 should
+                %be commented/uncommented!
+            end
+        end
         for ii = find([possibilities{:,3}] > 0)
             %if there's only 1 option which is not yet assigned
             if (possibilities{ii,3} == 1 && possibilities{ii,4} == 0)
-                %Set the possibility of the other to this option as well
-                possibilities{[possibilities{:,1}] == [possibilities{ii,2}],2} = possibilities{ii,1};
+                currPartner = possibilities{ii,2};
+                
                 %Set the linking of this and the other to each other
                 %Of the one being checked
                 possibilities{ii,4} = possibilities{ii,2};
+                
+                %Set the possibility of the other to this option as well
                 %and of its partner
-                possibilities{[possibilities{:,1}] == [possibilities{ii,2}],4} = possibilities{ii,1};
-
+                possibilities{currPartner,2} = possibilities{ii,1};
+                possibilities{currPartner,4} = possibilities{ii,1};
                 %remove the same option from others
                 %For this, check the other arrays
-                currPartner = find([possibilities{:,1}] == [possibilities{ii,2}]);
                 for k = 1:size(possibilities,1)
                     %check if k is not the current instance
                     if k ~= ii
                         %or its partner
                         if k ~= currPartner
-                            %skip this is its empty
+                            %skip this if its empty
                             if ~isempty([possibilities{k,2}])
-                                %now, only all others are found
-                                %remove index of i
-                                possibilities{k,2}(find([possibilities{k,2}] == possibilities{ii,1})) = [];
-                                %remove index of partner
-                                possibilities{k,2}(find([possibilities{k,2}] == possibilities{ii,2})) = [];
+                                if (sum(possibilities{k,2}==ii) + sum(possibilities{k,2}==possibilities{ii,2}) )>0
+                                    %now, only all others are found
+                                    %remove index of i
+                                    possibilities{k,2}(find([possibilities{k,2}] == possibilities{ii,1})) = [];
+                                    %remove index of partner
+                                    possibilities{k,2}(find([possibilities{k,2}] == possibilities{ii,2})) = [];
+                                end
                             end
                         end
                     end

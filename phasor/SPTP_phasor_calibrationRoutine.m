@@ -54,18 +54,45 @@ stddistY(isnan(stddistY))=0;
 %Fitparameters
 fo = fitoptions('Method','NonlinearLeastSquares',...
     'StartPoint',[1,1,1,1]);
-ft = fittype('real(a*x^3+b*x^2+c*x+d)','options',fo);
-ftnlm = @(a,x) real(a(1).*x.^3+a(2).*x.^2+a(3).*x+a(4));
+% ft = fittype('real(a*x^3+b*x^2+c*x+d)','options',fo);
+% ftnlm = @(a,x) real(a(1).*x.^3+a(2).*x.^2+a(3).*x+a(4));
+ftnlm = @(a,x) real(a(5).*x.^4+a(1).*x.^3+a(2).*x.^2+a(3).*x+a(4));
 
+%z-positions to nm (introduced at 4th order polynomial fix)
+zpositions = zpositions*1000;
+%Make error output if sizes do not match
+if size(zpositions,2) ~= size(meandistX,1)
+    stepsize = zpositions(2)-zpositions(1);
+    newsteppos = (zpositions(end)-zpositions(1))/(size(meandistX,1)-1);
+    disp('Error!')
+    disp('Mismatch in size of entered z-positions and size of calibration movie!')
+%     error('Size of entered z-positions is %.0f, of calib movie is %.0f. Try a step size of %.4f µm', size(zpositions,2), size(meandistX,1), newsteppos);
+    disp(['Size of entered z-positions is ' num2str(size(zpositions,2)) ', of calib movie is ' num2str(size(meandistX,1)) '. Try a step size of ' num2str(newsteppos) ' µm']);
+    keyboard
+end
 %Fit x distance curve
 fitarraydistX = meandistX(meandistX>(0.1))';%50/100
 fitarraydistXstd = stddistX(meandistX>(0.1))';%50/100
 [fitarraydistX_xpos,~] = find(meandistX == fitarraydistX);
 fitarraydistX_xpos=zpositions(fitarraydistX_xpos)';
+
+
+% fitarraydistX = distX(distX>(0.1))'; %Check for positive distX values
+% [fitarraydistX_xpos,~] = find(distX == fitarraydistX); %Only save positive distX values
+% fitarraydistX_xpos=zpositions(fitarraydistX_xpos); %Get corresponding z-pos
+% 
+% fitarraydistY = distY(distY>(0.1))'; %repeat of happenstance in x
+% [fitarraydistY_xpos,~] = find(distY == fitarraydistY);
+% fitarraydistY_xpos=zpositions(fitarraydistY_xpos);
+
 if sum(fitarraydistXstd)>0
-[curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[1 1 1 1],'Weight',1./fitarraydistXstd);
+% [curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[1 1 1 1 1],'Weight',1./fitarraydistXstd);
+[curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[-1e-8 1e-5 -1e-2 -1 1e-12],'Weight',1./fitarraydistXstd);
+% [curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[1 1 1 1],'Weight',1./fitarraydistXstd);
 else
-[curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[1 1 1 1]);
+% [curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[1 1 1 1 1]);
+[curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[-1e-8 1e-5 -1e-2 -1 1e-12]);
+% [curveXnlm] = fitnlm((fitarraydistX_xpos),fitarraydistX',ftnlm,[1 1 1 1]);
 end
 [curveXnlmpred,curveXnlmconf] = predict(curveXnlm,fitarraydistX_xpos,'Simultaneous',true);
 
@@ -75,24 +102,24 @@ fitarraydistYstd = stddistY(meandistY>(0.1))';%50/100
 [fitarraydistY_xpos,~] = find(meandistY == fitarraydistY);
 fitarraydistY_xpos=zpositions(fitarraydistY_xpos)';
 if sum(fitarraydistYstd)>0
-[curveYnlm] = fitnlm((fitarraydistY_xpos),fitarraydistY',ftnlm,[1 1 1 1],'Weight',1./fitarraydistYstd);
+[curveYnlm] = fitnlm((fitarraydistY_xpos),fitarraydistY',ftnlm,[1 1 1 1 1],'Weight',1./fitarraydistYstd);
 else
-[curveYnlm] = fitnlm((fitarraydistY_xpos),fitarraydistY',ftnlm,[1 1 1 1]);
+[curveYnlm] = fitnlm((fitarraydistY_xpos),fitarraydistY',ftnlm,[1 1 1 1 1]);
 end
 [curveYnlmpred,curveYnlmconf] = predict(curveYnlm,fitarraydistY_xpos,'Simultaneous',true);
 
 figure(6);clf(6);
-hold on
-a1=errorbar(zpositions,meandistX,stddistX,'r--o','MarkerSize',2,'Color',[1 0.4 0.2])
-a2=errorbar(zpositions,meandistY,stddistY,'b--o','MarkerSize',2,'Color',[0.2 0.4 1])
-k = plot(fitarraydistX_xpos,curveXnlmpred,'r-')
-set(k,'LineWidth',2)
-k = plot(fitarraydistY_xpos,curveYnlmpred,'b-')
-set(k,'LineWidth',2)
-k=plot(fitarraydistX_xpos,curveXnlmconf,'r:')
-set(k,'LineWidth',1.5)
-k=plot(fitarraydistY_xpos,curveYnlmconf,'b:')
-set(k,'LineWidth',1.5)
+hold on;
+a1=errorbar(zpositions,meandistX,stddistX,'r--o','MarkerSize',2,'Color',[1 0.4 0.2]);
+a2=errorbar(zpositions,meandistY,stddistY,'b--o','MarkerSize',2,'Color',[0.2 0.4 1]);
+k = plot(fitarraydistX_xpos,curveXnlmpred,'r-');
+set(k,'LineWidth',2);
+k = plot(fitarraydistY_xpos,curveYnlmpred,'b-');
+set(k,'LineWidth',2);
+k=plot(fitarraydistX_xpos,curveXnlmconf,'r:');
+set(k,'LineWidth',1.5);
+k=plot(fitarraydistY_xpos,curveYnlmconf,'b:');
+set(k,'LineWidth',1.5);
 axis([-inf inf 0 12])
 grid on
 legend({'X-real distance','Y-real distance','X-fit','Y-fit'},'location','north')

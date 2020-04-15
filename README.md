@@ -1,44 +1,28 @@
-# SMALL-LABS-GUI
+# SMALL-LABS-pSMLM
 
-By Koen Martens, Hohlbein Lab, Wageningen University, The Netherlands.
-Please see Quick start guide GUI.pdf for a quickstart.
-
-Run the GUI in MATLAB by ensuring that your current MATLAB working directory is the parent folder with the GUI_main.m file inside (so normally ...\Github\SMALL-LABS_Hohlbein_public). Then, run 'GUI_main' from the command-line.
-
-# SMALL-LABS
+SMALL-LABS-pSMLM is an extension of SMALL-LABS, software written by Benjamin P Isaacoff at the University of Michigan. The extension contains pSMLM-based localization, along with an extensive GUI.
 
 The SMALL-LABS (Single-Molecule Accurate Localization by Local Background Subtraction) algorithm, accurately locates and measures the intensity of single molecules, regardless of the shape or brightness of the background.
 
-The program can also fit single molecules without doing background subtraction. See the User Guide for more details.
+The SMALL-LABS algorithm is described in B.P. Isaacoff, Y. Li, S.A. Lee and J.S. Biteen, “SMALL-LABS: An algorithm for measuring single-molecule intensity and position in the presence of obscuring backgrounds,” _Biophysical Journal_, in press (**2019**). https://doi.org/10.1016/j.bpj.2019.02.006
 
-Written by Benjamin P Isaacoff at the University of Michigan.
-
-This algorithm is described in B.P. Isaacoff, Y. Li, S.A. Lee and J.S. Biteen, “SMALL-LABS: An algorithm for measuring single-molecule intensity and position in the presence of obscuring backgrounds,” _Biophysical Journal_, in press (**2019**). https://doi.org/10.1016/j.bpj.2019.02.006
+The pSMLM- and GUI-addition of SMALL-LABS is written by Koen J.A. Martens at the University of Wageningen.
 
 ## Installation
 
-Download the entire folder and unzip if you downloaded the .zip folder. Change the working directory in Matlab to this folder and call the functions in the Matlab command window as described in the User Guide.
+Download the entire folder. Change the working directory in Matlab to this folder and open 'GUI_main.m' to open the GUI.
 
 ## Usage
 
-See the Quick Start Guide for a quick introduction to using *SMALLLABS_main*. 
+Please see Quick start guide GUI.pdf for a quick-start guide.
 
-See the User Guide for the details. Briefly, the function *SMALLLABS_main* is a wrapper for the other code to perform all of the steps in the correct order. Simply run *SMALLLABS_main* by specifying the directory containing your movies, specify the three required parameters, and any optional parameters, then run it and click to choose the movies you want to fit. Or run the various programs independently.
-
-## Contributing
-
-Please inform us (isaacoff@umich.edu) before making any changes, then follow the directions below: 
-1. Fork it!
-2. Create your feature branch: `git checkout -b my-new-feature`
-3. Commit your changes: `git commit -am 'Add some feature'`
-4. Push to the branch: `git push origin my-new-feature`
-5. Submit a pull request :D
+Briefly, one should select the file(s) for localization at the top, choose the appropriate settings, and press 'Start Analysis'.
 
 ## Credits
 
 All individual programs should have all their individual attributions in place including authors. 
 
-This code was developed with support from the National Science Foundation (NSF grant CHE-1252322).
+The SMALL-LABS code was developed with support from the National Science Foundation (NSF grant CHE-1252322).
 
 The development of this code is greatly indebted to the work of David J Rowland (often referred to as DJR in the code). In addition to containing some functions written by him, I’ve borrowed a lot of code snippets from his programs.
 

@@ -13,6 +13,18 @@ function [curveAngle curveDistAngle magnratiorange wobbleMatrix] = pSMLM_DH_cali
 %     Z
 %     - wobble file to correct for wobble in xy
 
+%% Check size of stacks
+%Make error output if sizes do not match
+if size(zposcali,2) ~= (max(input(:,1))-min(input(:,1)))
+    stepsize = zposcali(2)-zposcali(1);
+    newsteppos = (zposcali(end)-zposcali(1))/((max(input(:,1))-min(input(:,1)))-1);
+    disp('Error!')
+    disp('Mismatch in size of entered z-positions and size of calibration movie!')
+%     error('Size of entered z-positions is %.0f, of calib movie is %.0f. Try a step size of %.4f µm', size(zpositions,2), size(meandistX,1), newsteppos);
+    disp(['Size of entered z-positions is ' num2str(size(zposcali,2)) ', of calib movie is ' num2str((max(input(:,1))-min(input(:,1)))) '. Try a step size of ' num2str(newsteppos) ' µm']);
+    keyboard
+end
+
 %% Required variables
 %Very rough min and max distance between points, in pixels. Preferably this
 %should be well outside real value
@@ -140,14 +152,22 @@ if imagegen
     plot(zposcali,0.1*distancemean,'k-');
     %     errorbar(zposcali,distancemean,distancestd);
     ylabel('Distance between lobes (µm)')
-    axis([-1 1 1.1-.25 1.1+.25])
+%     axis([-1 1 1.1-.25 1.1+.25])
+    axis([-1 1 1.1-.18 1.1+.18])
     ax = gca;
     ax.YColor = 'k';
     yyaxis right
+    %Ang in RAD
     fill([zposcali fliplr(zposcali)],[(anglemean+anglestd*2) fliplr(anglemean-anglestd*2)],[.7 .7 .7],'EdgeColor',[.7 .7 .7])
+%     Ang in Degree
+%     fill([zposcali fliplr(zposcali)],[(anglemean+anglestd*2) fliplr(anglemean-anglestd*2)]/(2*pi)*360,[.7 .7 .7],'EdgeColor',[.7 .7 .7])
 %     plot(zposcali,anglemean,'k:');
 %     errorbar(zposcali,anglemean,anglestd);
     plot(zposcali,ycalidata,'k-')
+%     set(gca,'YTick',[30:20:150])
+%     linspace(45,125,9)
+% d=-10;
+%     axis([-1 1 28+d 172+d])
     % plot(zposcali,curveCI,'k:')
     ylabel('Angle (rad)')
     ax = gca;

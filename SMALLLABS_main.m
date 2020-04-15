@@ -96,6 +96,12 @@ verbose=true; %Set verbose to true to have matlab print the current step and dat
 % details about the meaning and function of these parameters. The default
 % parameter values are:
 
+%Save and load intermediate steps as mat
+params.saveloadmat = true;
+
+%Check if GUI is used. Normally 0, calling SMALLLABS from GUI sets it to 1
+params.useGUI = 0;
+
 %%% Actions %%%
 % Do background subtraction
 params.bgsub = true;
@@ -243,11 +249,18 @@ paramsnames=fieldnames(params);
 % if any parameters are included as inputs, change the parameter mentioned
 if nargin>4
     for ii=1:2:nargin-5
-        whichField = strcmp(paramsnames,varargin{ii});       
-        try
-            eval(['params.' paramsnames{whichField} ' = varargin{ii+1};'])
-        catch
-            error([varargin{ii}, '  is not an input parameter. Check the spelling.'])
+        whichField = strcmp(paramsnames,varargin{ii});    
+        if strcmp('handles',varargin{ii})
+            GUIhandles = varargin{ii+1};
+            axis(GUIhandles.axes1);
+            plot([1,2],[1,2]);
+            axis off
+        else
+            try
+                eval(['params.' paramsnames{whichField} ' = varargin{ii+1};'])
+            catch
+                error([varargin{ii}, '  is not an input parameter. Check the spelling.'])
+            end
         end
     end
 end
@@ -343,29 +356,48 @@ try
     addpath(genpath('gpufit'))
 end
 
+if params.useGUI
+    drawGUIloadbar(0.01,'Starting',GUIhandles)
+else
 h2=waitbar(0);
 set(findall(h2,'type','text'),'Interpreter','none');
 waitbar(0,h2,'Starting SMALLLABS');
+end
 wholeshabang=tic;
 for ii=1:numel(dlocs)
     clear goodframe
-    try; waitbar((7*ii-6)/numel(dlocs)/7,h2); end
-    
+    if params.useGUI
+        drawGUIloadbar((7*ii-6)/numel(dlocs)/7,{['Initializing']},GUIhandles) 
+    else
+        try; waitbar((7*ii-6)/numel(dlocs)/7,h2); end
+    end
     %% Convert the movies to .mat
     % Movies must be version 7.3 mat files with the movie data saved in the
     % 'mov' variable. This function converts several standard scientific movie
     % data types into this format.
     if params.fullmovie
-        Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}])
+        mov = Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],params);
     elseif params.specificframeanalysis %only specific frame - keep in mind the frames required for temporal subtraction, should also be loaded
-        Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],[params.specificframe-max(avgwin,moloffwin),params.specificframe+max(avgwin,moloffwin)])
+        if params.bgsub
+            startframe = params.specificframe-max(avgwin,moloffwin);
+            endframe = params.specificframe+max(avgwin,moloffwin);
+            if startframe < 0
+                error('Impossible! Background subtraction is bigger than frame, use a different frame for preview!')
+            end
+        else
+            startframe = params.specificframe;
+            endframe = params.specificframe+1;
+        end
+        mov = Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],params,[startframe,endframe]);
     else %only first X frames
-        Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],[1,params.nrframes])
+        mov = Movie2mat([dlocs{ii},filesep,dnames{ii},exts{ii}],params,[1,params.nrframes]);
     end
 %     if params.fullmovie == 0
 %         mov = mov(:,:,1:params.nrframes);
 %     end
-    load([dlocs{ii},filesep,dnames{ii},'.mat'],'mov');
+    if params.saveloadmat
+        load([dlocs{ii},filesep,dnames{ii},'.mat'],'mov');
+    end
     mov=single(mov);
     movsz=size(mov);
     try
@@ -396,67 +428,93 @@ for ii=1:numel(dlocs)
             %             if avgsubparams.subwidth==avgwin && avgsubparams.offset==params.offset && avgsubparams.do_avg==params.do_avg && sum(avgsubparams.goodframe)==sum(goodframe)
 %                 disp(sprintf(['Avgsub parameters unchanged from previous calculation.\r Skipping avgsub on ',dnames{ii}],1))
 %             else
-                try; waitbar((7*ii-5)/numel(dlocs)/7,h2,{['Running AVGSUB on ',dnames{ii}],'Overall Progress'}); end
+                if params.useGUI
+                    drawGUIloadbar((7*ii-5)/numel(dlocs)/7,{['Running AVGSUB on ',dnames{ii}]},GUIhandles) 
+                else
+                    try; waitbar((7*ii-5)/numel(dlocs)/7,h2,{['Running AVGSUB on ',dnames{ii}],'Overall Progress'}); end
+                end
                 bgsub_mov=AVGSUB_movs([dlocs{ii},filesep,dnames{ii}],mov,goodframe,...
-                    params.do_avg,avgwin,params.offset);
+                    params.do_avg,avgwin,params.offset,params.saveloadmat);
+%                 AVGSUB_movs([dlocs{ii},filesep,dnames{ii}],mov,goodframe,...
+%                     params.do_avg,avgwin,params.offset,params.saveloadmat);
 %             end
         else
             %do the avgsub
-            try; waitbar((7*ii-5)/numel(dlocs)/7,h2,{['Running AVGSUB on ',dnames{ii}],'Overall Progress'}); end
+            if params.useGUI
+                drawGUIloadbar((7*ii-5)/numel(dlocs)/7,{['Running AVGSUB on ',dnames{ii}]},GUIhandles) 
+            else
+                try; waitbar((7*ii-5)/numel(dlocs)/7,h2,{['Running AVGSUB on ',dnames{ii}],'Overall Progress'}); end
+            end
             bgsub_mov=AVGSUB_movs([dlocs{ii},filesep,dnames{ii}],mov,goodframe,...
-                params.do_avg,avgwin,params.offset);
+                params.do_avg,avgwin,params.offset,params.saveloadmat);
         end        
     end
     %% Make Guesses
     % loop through each movie and make the guesses, which will be saved in a
     % .mat file called moviename_guesses.mat
     if params.guessing
-        try; waitbar((7*ii-4)/numel(dlocs)/7,h2,{['Making guesses for ',dnames{ii}],'Overall Progress'}); end
+        if params.useGUI
+            drawGUIloadbar((7*ii-4)/numel(dlocs)/7,{['Making guesses for ',dnames{ii}]},GUIhandles) 
+        else
+            try; waitbar((7*ii-4)/numel(dlocs)/7,h2,{['Making guesses for ',dnames{ii}],'Overall Progress'}); end
+        end
         if params.bgsub
             % try loading in the bgsub movie
-            try
-                bgsub_mov=load([dlocs{ii},filesep,dnames{ii},'_avgsub.mat'],'mov');
-                bgsub_mov=bgsub_mov.mov;
-            catch
-                warning('No avgsub file was found, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
-                keyboard
-                params.bgsub=0;
+            if params.saveloadmat
+                try
+                    bgsub_mov=load([dlocs{ii},filesep,dnames{ii},'_avgsub.mat'],'mov');
+                    bgsub_mov=bgsub_mov.mov;
+                catch
+                    warning('No avgsub file was found, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
+                    keyboard
+                    params.bgsub=0;
+                end
             end
             if params.bgsub
-                Guessing([dlocs{ii},filesep,dnames{ii},'_avgsub'],bgsub_mov,movsz,goodframe,dfrlmsz,...
+                [guesses,roinum] = Guessing([dlocs{ii},filesep,dnames{ii},'_avgsub'],bgsub_mov,movsz,goodframe,dfrlmsz,...
                     params.bpthrsh,params.egdesz,params.pctile_frame,params.checkGuesses,...
                     params.mask_fname,params.make_guessmovie,params.filtermethod,params);
             else
-                Guessing([dlocs{ii},filesep,dnames{ii}],mov,movsz,goodframe,dfrlmsz,...
+                [guesses,roinum] = Guessing([dlocs{ii},filesep,dnames{ii}],mov,movsz,goodframe,dfrlmsz,...
                     params.bpthrsh,params.egdesz,params.pctile_frame,params.checkGuesses,...
                     params.mask_fname,params.make_guessmovie,params.filtermethod,params);
             end
         else
-            Guessing([dlocs{ii},filesep,dnames{ii}],mov,movsz,goodframe,dfrlmsz,...
+            [guesses,roinum] = Guessing([dlocs{ii},filesep,dnames{ii}],mov,movsz,goodframe,dfrlmsz,...
                 params.bpthrsh,params.egdesz,params.pctile_frame,params.checkGuesses,...
                 params.mask_fname,params.make_guessmovie,params.filtermethod,params);
         end
-        clear bgsub_mov
+        if params.saveloadmat
+            clear bgsub_mov guesses
+        end
     end   
     %% Make the off frames list
     % Only if doing bgsub. 
     % Loop through all of the movies and using the guesses .mat file, will write
     % the off frames list to a .mat file, called guessesname_Mol_off_frames.mat
     if params.makeOffFrames && params.bgsub
-        try; waitbar((7*ii-3)/numel(dlocs)/7,h2,{['Making off-frames lists for ',dnames{ii}],'Overall Progress'}); end
-        %try loading in the guesses
-        try
-            load([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses.mat'],'guesses','dfrlmsz')
-        catch
-            warning('No avgsub_guesses file was found, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
-            keyboard
-            params.bgsub=0;
+        if params.useGUI
+            drawGUIloadbar((7*ii-3)/numel(dlocs)/7,{['Making off-frames lists for ',dnames{ii}]},GUIhandles) 
+        else
+            try; waitbar((7*ii-3)/numel(dlocs)/7,h2,{['Making off-frames lists for ',dnames{ii}],'Overall Progress'}); end
+        end
+            %try loading in the guesses
+        if params.saveloadmat
+            try
+                load([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses.mat'],'guesses','dfrlmsz')
+            catch
+                warning('No avgsub_guesses file was found, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
+                keyboard
+                params.bgsub=0;
+            end
         end
         if params.bgsub
-            Mol_off_frames([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses.mat'],...
-                guesses,goodframe,movsz,dfrlmsz,moloffwin);
+            off_frames=Mol_off_frames([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses.mat'],...
+                guesses,goodframe,movsz,dfrlmsz,moloffwin,params.saveloadmat);
         end
-        clear guesses
+        if params.saveloadmat
+            clear guesses
+        end
     end
     %% Subtract and fit
     % If not doing bgsub then a string ('nobgsub') is sent to
@@ -466,61 +524,80 @@ for ii=1:numel(dlocs)
     % moviename_AccBGSUB_fits.mat, otherwise if not doing bgsub, it's
     % called moviename_fits.mat.
     if params.fitting
-        try; waitbar((7*ii-2)/numel(dlocs)/7,h2,{['Fitting ',dnames{ii}],'Overall Progress'}); end
+        if params.useGUI
+            drawGUIloadbar((7*ii-2)/numel(dlocs)/7,{['Fitting ',dnames{ii}]},GUIhandles) 
+        else
+            try; waitbar((7*ii-2)/numel(dlocs)/7,h2,{['Fitting ',dnames{ii}],'Overall Progress'}); end
+        end
         if params.bgsub
             %try loading in the mol_off_frames
-            try
-                load([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses_Mol_off_frames.mat'],'off_frames','dfrlmsz','moloffwin')
-            catch
-                warning('No Mol_off_frames file was found, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
-                keyboard
-                params.bgsub=0;
-            end            
+            if params.saveloadmat
+                try
+                    load([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses_Mol_off_frames.mat'],'off_frames','dfrlmsz','moloffwin')
+                catch
+                    warning('No Mol_off_frames file was found, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
+                    keyboard
+                    params.bgsub=0;
+                end            
+            end
             if params.bgsub
                 % load in the guesses
-                load([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses.mat'],'guesses','roinum');
+                if params.saveloadmat
+                    load([dlocs{ii},filesep,dnames{ii},'_avgsub_guesses.mat'],'guesses','roinum');
+                end
                 % fit it
-                Subtract_then_fit([dlocs{ii},filesep,dnames{ii}],mov,movsz,...
+                fits = Subtract_then_fit([dlocs{ii},filesep,dnames{ii}],mov,movsz,...
                     off_frames,moloffwin,guesses,roinum,dfrlmsz,params.MLE_fit,params.stdtol,...
                     params.maxerr,params.do_avgsub,params.which_gaussian,params.fit_ang,params.usegpu,...
                     params.phasor_fit,params.phasor_rad,params);
             else
                 % load in the guesses
-                load([dlocs{ii},filesep,dnames{ii},'_guesses.mat'],'guesses','rounum','dfrlmsz')
+                if params.saveloadmat
+                    load([dlocs{ii},filesep,dnames{ii},'_guesses.mat'],'guesses','rounum','dfrlmsz')
+                end
                 % fit it
-                Subtract_then_fit([dlocs{ii},filesep,dnames{ii}],mov,movsz,...
+                fits = Subtract_then_fit([dlocs{ii},filesep,dnames{ii}],mov,movsz,...
                     'nobgsub','nobgsub',guesses,roinum,dfrlmsz,params.MLE_fit,params.stdtol,...
                     params.maxerr,params.do_avgsub,params.which_gaussian,params.fit_ang,params.usegpu,...
                     params.phasor_fit,params.phasor_rad,params);
             end
         else
             % load in the guesses
-            load([dlocs{ii},filesep,dnames{ii},'_guesses.mat'],'guesses','roinum','dfrlmsz')
+            if params.saveloadmat
+                load([dlocs{ii},filesep,dnames{ii},'_guesses.mat'],'guesses','roinum','dfrlmsz')
+            end
             % fit it
-            Subtract_then_fit([dlocs{ii},filesep,dnames{ii}],mov,movsz,...
+            fits = Subtract_then_fit([dlocs{ii},filesep,dnames{ii}],mov,movsz,...
                 'nobgsub','nobgsub',guesses,roinum,dfrlmsz,params.MLE_fit,params.stdtol,...
                 params.maxerr,params.do_avgsub,params.which_gaussian,params.fit_ang,params.usegpu,...
                     params.phasor_fit,params.phasor_rad,params);
         end
-        clear guesses off_frames
+        if params.saveloadmat
+            clear guesses off_frames
+        end
     end
-    
     %% Tracking
     % Does tracking and appends the tracks to the fits .mat file. Also will
     % append a logical vector called trk_filt which indicates if the fit
     % passed was successfully tracked and wasn't the first or last frame in
     % a track.
     if params.tracking
-        try; waitbar((7*ii-1)/numel(dlocs)/7,h2,{['Tracking ',dnames{ii}],'Overall Progress'}); end
+        if params.useGUI
+            drawGUIloadbar((7*ii-1)/numel(dlocs)/7,{['Tracking ',dnames{ii}]},GUIhandles) 
+        else
+            try; waitbar((7*ii-1)/numel(dlocs)/7,h2,{['Tracking ',dnames{ii}],'Overall Progress'}); end
+        end
         if params.bgsub
             % try loading in the fits
-            try
-                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits')
-            catch
-                warning('Fitting file was without AccBGSUB, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
-                keyboard
-                params.bgsub=0;
-                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits')
+            if params.saveloadmat
+                try
+                    load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits')
+                catch
+                    warning('Fitting file was without AccBGSUB, but bgsub was true.\r\t\t Either run new instance from beginning or continue without bgsub.',1)
+                    keyboard
+                    params.bgsub=0;
+                    load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits')
+                end
             end
             % track it
             if params.bgsub
@@ -531,27 +608,46 @@ for ii=1:numel(dlocs)
                     params.trackparams,params.savetracks);
             end
         else            
-            load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits')
+            if params.saveloadmat
+                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits')
+            end
             Track_filter([dlocs{ii},filesep,dnames{ii},'_fits.mat'],fits,...
                 params.trackparams,params.savetracks);
         end
-        clear fits
+        if params.saveloadmat
+            clear fits
+        end
     end
     %% Preview option
     if params.specificframeanalysis
         pause(0.5);
         %load fits
-        if params.bgsub
-            %try loading in the fits & tracking results
-            load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
-        else
-            load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+        if params.saveloadmat
+            if params.bgsub
+                %try loading in the fits & tracking results
+                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
+            else
+                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+            end
         end
-        fitsonframe = [fits.row(fits.frame==(max(avgwin,moloffwin)+1)) fits.col(fits.frame==(max(avgwin,moloffwin)+1))];
+        if params.bgsub
+            if params.specificframe > (max(avgwin,moloffwin)+1)
+                chosenframe = (max(avgwin,moloffwin)+1);
+            else
+                chosenframe = params.specificframe;
+            end
+        else
+            chosenframe = 1;
+        end
+%         fitsonframe = [fits.row(fits.frame==(max(avgwin,moloffwin)+1)) fits.col(fits.frame==(max(avgwin,moloffwin)+1))];
+        fitsonframe = [fits.row(fits.frame==chosenframe) fits.col(fits.frame==chosenframe)];
         figure(10);clf(10);
-        imagesc(mov(:,:,max(avgwin,moloffwin)+1))
+%         imagesc(mov(:,:,max(avgwin,moloffwin)+1))
+        imagesc(mov(:,:,chosenframe));
         hold on
-        scatter(fitsonframe(:,2),fitsonframe(:,1),130,'ro','filled')
+        if ~isempty(fitsonframe)
+            scatter(fitsonframe(:,2),fitsonframe(:,1),130,'ro','filled')
+        end
         set(gca,'YDir','reverse')
 %         axis off
         colorbar
@@ -565,11 +661,13 @@ for ii=1:numel(dlocs)
             disp([char(datetime),'   Starting cross-correlation drift correction'])
         end
         %load fits
-        if params.bgsub
-            %try loading in the fits & tracking results
-            load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
-        else
-            load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+        if params.saveloadmat
+            if params.bgsub
+                %try loading in the fits & tracking results
+                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
+            else
+                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+            end
         end
         totframes = max((fits.frame));
         nrccbins = params.dirftcorrcc_temporalbins;
@@ -664,6 +762,7 @@ for ii=1:numel(dlocs)
             plot([1:totframes],1000*driftZinterpolated/(movsz(2)/(maxzposbeforecc-minzposbeforecc)),'r-')
             ylabel('Z drift (nm)')
         end
+        
         avgshifthist(fits,params,movsz,[dlocs{ii},filesep,dnames{ii}],1);
         % %%
         %     figure(2);clf(2);
@@ -688,29 +787,7 @@ for ii=1:numel(dlocs)
         if verbose
             disp([char(datetime),'   Making average-shifted histogram'])
         end
-        if params.bgsub
-            %try loading in the fits & tracking results
-            if params.driftcorr_cc
-                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits_driftcorrcc.mat'],'fits');
-            else
-                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
-            end
-        else
-            if params.driftcorr_cc
-            	load([dlocs{ii},filesep,dnames{ii},'_fits_driftcorrcc.mat'],'fits');
-            else
-                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
-            end
-        end
-        avgshifthist(fits,params,movsz,[dlocs{ii},filesep,dnames{ii}],1);
-    end
-    %% Make ThunderSTORM-like csv output
-    
-    if( params.makeThSTORMoutput && params.specificframeanalysis == 0)
-        if verbose
-        disp([char(datetime),'   Making CSV output'])
-        end
-        try
+        if params.saveloadmat
             if params.bgsub
                 %try loading in the fits & tracking results
                 if params.driftcorr_cc
@@ -723,6 +800,32 @@ for ii=1:numel(dlocs)
                     load([dlocs{ii},filesep,dnames{ii},'_fits_driftcorrcc.mat'],'fits');
                 else
                     load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+                end
+            end
+        end
+        avgshifthist(fits,params,movsz,[dlocs{ii},filesep,dnames{ii}],1);
+    end
+    %% Make ThunderSTORM-like csv output
+    
+    if( params.makeThSTORMoutput && params.specificframeanalysis == 0)
+        if verbose
+        disp([char(datetime),'   Making CSV output'])
+        end
+        try
+            if params.saveloadmat
+                if params.bgsub
+                    %try loading in the fits & tracking results
+                    if params.driftcorr_cc
+                        load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits_driftcorrcc.mat'],'fits');
+                    else
+                        load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits');
+                    end
+                else
+                    if params.driftcorr_cc
+                        load([dlocs{ii},filesep,dnames{ii},'_fits_driftcorrcc.mat'],'fits');
+                    else
+                        load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits');
+                    end
                 end
             end
             array = zeros(size(fits.row,1),5);
@@ -751,10 +854,16 @@ for ii=1:numel(dlocs)
     % Make a ViewFits movie, or just go into debug mode, to look at the
     % results. Outpits an avi file called moviename_ViewFits.avi
     if( params.makeViewFits && params.specificframeanalysis == 0)
-        try; waitbar((7*ii)/numel(dlocs)/7,h2,{['Making Viewfits ',dnames{ii}],'Overall Progress'}); end
+        if params.useGUI
+            drawGUIloadbar((7*ii)/numel(dlocs)/7,{['Making Viewfits ',dnames{ii}]},GUIhandles) 
+        else
+            try; waitbar((7*ii)/numel(dlocs)/7,h2,{['Making Viewfits ',dnames{ii}],'Overall Progress'}); end
+        end
         if params.bgsub
             %try loading in the fits & tracking results
-            load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits','trk_filt','tracks');
+            if params.saveloadmat
+                load([dlocs{ii},filesep,dnames{ii},'_AccBGSUB_fits.mat'],'fits','trk_filt','tracks');
+            end
             
             %set trk_filt to empty if it doesn't exist            
             if ~exist('trk_filt','var')
@@ -788,7 +897,9 @@ for ii=1:numel(dlocs)
             end
         else
             %try loading in the fits & tracking results
-            load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits','trk_filt','tracks');
+            if params.saveloadmat
+                load([dlocs{ii},filesep,dnames{ii},'_fits.mat'],'fits','trk_filt','tracks');
+            end
             
             %set trk_filt to empty if it doesn't exist            
             if ~exist('trk_filt','var')
@@ -810,11 +921,18 @@ for ii=1:numel(dlocs)
                     params.circ_D,params.write_mov,params.autoscale_on,params.linewidth)
             end
         end
-        clear fits trk_filt tracks
+        if params.saveloadmat
+            clear fits trk_filt tracks
+        end
     end
 end
-try
-    delete(h2)
+
+if params.useGUI
+    drawGUIloadbar(1,{['Finished']},GUIhandles) 
+else
+    try
+        delete(h2)
+    end
 end
 tictoc=toc(wholeshabang);
 % disp(num2str(tictoc))

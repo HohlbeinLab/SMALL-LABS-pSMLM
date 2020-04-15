@@ -3,6 +3,18 @@ function [fitcurveXY,fitcurveYX] = astig_phasor_calibrationRoutine(calibstack,zp
 %Perform phasor on the stack. Input stack should have correct dimensions
 %already
 %calibstack is x-y-frame-repeatOnFrame 4D matrix
+
+%Make error output if sizes do not match
+if size(zpositions,2) ~= size(calibstack,3)
+    stepsize = zpositions(2)-zpositions(1);
+    newsteppos = (zpositions(end)-zpositions(1))/(size(calibstack,3)-1);
+    disp('Error!')
+    disp('Mismatch in size of entered z-positions and size of calibration movie!')
+%     error('Size of entered z-positions is %.0f, of calib movie is %.0f. Try a step size of %.4f µm', size(zpositions,2), size(meandistX,1), newsteppos);
+    disp(['Size of entered z-positions is ' num2str(size(zpositions,2)) ', of calib movie is ' num2str(size(calibstack,3)) '. Try a step size of ' num2str(newsteppos) ' µm']);
+    keyboard
+end
+
 for frame = 1:size(zpositions,2)
     try
     [~,magnitudes(:,:,frame),~,~,~] = Phasor_localization_SMALLLABS(permute(calibstack(:,:,frame,:),[1 2 4 3]),0,'');
@@ -33,7 +45,6 @@ magnXY = avgMagnRatioXY(((avgMagnRatioXY > 0 )&(avgMagnRatioXY>avgMagnRatioYX)))
 zposYX = (zpos(((avgMagnRatioYX > 0 )&(avgMagnRatioYX>avgMagnRatioXY))))';
 stdYX = stdMagnRatioYX(((avgMagnRatioYX > 0 )&(avgMagnRatioYX>avgMagnRatioXY)));
 magnYX = avgMagnRatioYX(((avgMagnRatioYX > 0 )&(avgMagnRatioYX>avgMagnRatioXY)));
-
 %Find cross-point
 if magnXY(1) > 1
     crosspoint = max(zposXY(magnXY>1))

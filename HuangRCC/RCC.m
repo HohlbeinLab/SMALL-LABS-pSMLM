@@ -14,7 +14,7 @@
 
 function [coordscorr, finaldrift, A,b] = RCC(coords, segpara, imsize, pixelsize, binsize, rmax)
     
-zoomfactor = pixelsize / binsize;
+zoomfactor = pixelsize / binsize
 ntotalframe = max(coords(:,3));
 
 coordscorr = zeros(size(coords,1),size(coords,2));
