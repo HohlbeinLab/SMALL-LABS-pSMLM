@@ -1,12 +1,14 @@
 # SMALL-LABS-pSMLM
 
+pSMLM pre-print at https://www.biorxiv.org/content/10.1101/2020.04.15.043182v1
+
 SMALL-LABS-pSMLM is an extension of SMALL-LABS, software written by Benjamin P Isaacoff at the University of Michigan. The extension contains pSMLM-based localization, along with an extensive GUI.
 
 The SMALL-LABS (Single-Molecule Accurate Localization by Local Background Subtraction) algorithm, accurately locates and measures the intensity of single molecules, regardless of the shape or brightness of the background.
 
 The SMALL-LABS algorithm is described in B.P. Isaacoff, Y. Li, S.A. Lee and J.S. Biteen, “SMALL-LABS: An algorithm for measuring single-molecule intensity and position in the presence of obscuring backgrounds,” _Biophysical Journal_, in press (**2019**). https://doi.org/10.1016/j.bpj.2019.02.006
 
-The pSMLM- and GUI-addition of SMALL-LABS is written by Koen J.A. Martens at the University of Wageningen.
+The pSMLM- and GUI-addition of SMALL-LABS is written by Koen J.A. Martens at the University of Wageningen: https://www.biorxiv.org/content/10.1101/2020.04.15.043182v1.
 
 ## Installation
 
