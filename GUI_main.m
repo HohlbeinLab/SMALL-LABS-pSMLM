@@ -83,7 +83,7 @@ varargout{1} = handles.output;
 function pushbutton1_Callback(hObject, eventdata, handles)
 disp(' ');
 disp(' ');
-disp([char(datetime),'   Starting SMALLLABS_JH from GUI'])
+disp([char(datetime),'   Starting SMALLLABS-pSMLM from GUI'])
 fnames = fieldnames(handles);
 fvals = struct2cell(handles);
 fvals_to_save = {};
