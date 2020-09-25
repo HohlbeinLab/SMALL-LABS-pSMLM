@@ -1,6 +1,6 @@
 ﻿# SMALL-LABS-pSMLM
 
-pSMLM pre-print at https://www.biorxiv.org/content/10.1101/2020.04.15.043182v1
+The manuscript describing pSMLM-exotic PSF and integration in SMALL-LABS can be found at https://www.sciencedirect.com/science/article/pii/S1046202320301250 (Martens et al., "Integrating engineered point spread functions into the phasor-based single-molecule localization microscopy framework", Methods, 2020); the original phasor-based localization algorithm is described at https://aip.scitation.org/doi/full/10.1063/1.5005899 (Martens et al., "Phasor based single-molecule localization microscopy in 3D (pSMLM-3D): an algorithm for MHz localization rates using standard CPUs", Journal of Chemical Physics, 2018). Please cite accordingly.
 
 SMALL-LABS-pSMLM is an extension of SMALL-LABS, software written by Benjamin P Isaacoff at the University of Michigan. The extension contains pSMLM-based localization, along with an extensive GUI.
 
@@ -8,7 +8,7 @@ The SMALL-LABS (Single-Molecule Accurate Localization by Local Background Subtra
 
 The SMALL-LABS algorithm is described in B.P. Isaacoff, Y. Li, S.A. Lee and J.S. Biteen, “SMALL-LABS: An algorithm for measuring single-molecule intensity and position in the presence of obscuring backgrounds,” _Biophysical Journal_, in press (**2019**). https://doi.org/10.1016/j.bpj.2019.02.006
 
-The pSMLM- and GUI-addition of SMALL-LABS is written by Koen J.A. Martens at the University of Wageningen: https://www.biorxiv.org/content/10.1101/2020.04.15.043182v1.
+The pSMLM- and GUI-addition of SMALL-LABS is written by Koen J.A. Martens at the University of Wageningen: https://www.sciencedirect.com/science/article/pii/S1046202320301250.
 
 ## Installation
 
